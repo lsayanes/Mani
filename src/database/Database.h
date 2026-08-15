@@ -1,12 +1,14 @@
 #pragma once
 
 #include "model/Cuenta.h"
+#include "model/ResumenMes.h"
 
 #include <optional>
 #include <vector>
 
 #include <QObject>
 #include <QString>
+#include <QStringList>
 
 class Database : public QObject
 {
@@ -27,6 +29,9 @@ public:
 
     std::optional<std::int64_t> tasaCambio(const QString &mes);
     bool guardarTasaCambio(const QString &mes, std::int64_t usdAArsCentavos);
+
+    QStringList mesesConDatos();
+    std::vector<ResumenMes> resumenHistorico();
 
     QString lastError() const;
 

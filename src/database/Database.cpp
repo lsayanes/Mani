@@ -247,6 +247,54 @@ bool Database::guardarTasaCambio(const QString &mes, std::int64_t usdAArsCentavo
     return true;
 }
 
+QStringList Database::mesesConDatos()
+{
+    QStringList meses;
+
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+    QSqlQuery query(db);
+    if (!query.exec(QStringLiteral("SELECT DISTINCT mes FROM saldo_mes ORDER BY mes DESC"))) {
+        m_lastError = query.lastError().text();
+        return meses;
+    }
+
+    while (query.next()) {
+        meses.append(query.value(0).toString());
+    }
+
+    return meses;
+}
+
+std::vector<ResumenMes> Database::resumenHistorico()
+{
+    std::vector<ResumenMes> resumenes;
+
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+    QSqlQuery query(db);
+    if (!query.exec(QStringLiteral(
+            "SELECT s.mes, "
+            "SUM(CASE WHEN c.moneda = 1 THEN s.saldo_inicial - s.saldo_actual ELSE 0 END), "
+            "SUM(CASE WHEN c.moneda = 2 THEN s.saldo_inicial - s.saldo_actual ELSE 0 END) "
+            "FROM saldo_mes s "
+            "INNER JOIN cuenta c ON c.id = s.cuenta_id "
+            "GROUP BY s.mes "
+            "ORDER BY s.mes DESC"))) {
+        m_lastError = query.lastError().text();
+        return resumenes;
+    }
+
+    while (query.next()) {
+        ResumenMes resumen;
+        resumen.mes = query.value(0).toString();
+        resumen.gastadoUsd = query.value(1).toLongLong();
+        resumen.gastadoArs = query.value(2).toLongLong();
+        resumen.tasa = tasaCambio(resumen.mes);
+        resumenes.push_back(resumen);
+    }
+
+    return resumenes;
+}
+
 QString Database::lastError() const
 {
     return m_lastError;

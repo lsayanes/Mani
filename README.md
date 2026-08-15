@@ -21,7 +21,14 @@ Especificación completa del producto: [`mani.md`](mani.md).
 - Totales al pie: saldo **actual** y **gastado** en USD/ARS, más consolidado en pesos.
 - El consolidado se muestra solo cuando hay tasa cargada para el mes activo.
 
-Próximas fases (ver `mani.md`): historial mensual, movimientos, categorías y reportes, export/backup.
+**Fase 3** implementada:
+
+- Selector de mes (combo, anterior/siguiente, botón **Hoy**).
+- Vista de meses anteriores con sus saldos y totales.
+- Diálogo **Historial** con comparativa de gastos por mes (doble clic para abrir un mes).
+- Rollover automático al abrir el mes calendario actual.
+
+Próximas fases (ver `mani.md`): movimientos, categorías y reportes, export/backup.
 
 ## Requisitos
 
