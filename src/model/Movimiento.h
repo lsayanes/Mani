@@ -15,5 +15,6 @@ struct Movimiento
     QDate fecha;
     std::int64_t monto = 0;
     QString concepto;
+    QString categoria;
     Moneda moneda = Moneda::ARS;
 };

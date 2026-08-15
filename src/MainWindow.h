@@ -32,6 +32,7 @@ private slots:
     void onMesHoy();
     void onMesComboChanged(int index);
     void onVerHistorial();
+    void onVerReportes();
 
 private:
     void refresh();

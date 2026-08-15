@@ -35,7 +35,14 @@ Especificación completa del producto: [`mani.md`](mani.md).
 - Ya no se edita el saldo actual a mano; solo el saldo inicial al editar una cuenta.
 - Botón **Movimientos** en cada cuenta y acción **Nuevo movimiento** en la barra.
 
-Próximas fases (ver `mani.md`): categorías y reportes, export/backup.
+**Fase 5** implementada:
+
+- **Categoría opcional** en cada movimiento (combo editable con categorías usadas antes).
+- Acción **Reportes** con dos pestañas:
+  - **Por categoría**: gasto de egresos del mes en USD y ARS (tabla + gráfico de barras).
+  - **Por mes**: comparativa de gastos mensuales (tabla + gráfico consolidado cuando hay tasa).
+
+Próximas fases (ver `mani.md`): export/backup y bloqueo de la app.
 
 ## Requisitos
 

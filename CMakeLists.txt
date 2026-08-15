@@ -22,6 +22,8 @@ qt_add_executable(Mani
     src/ui/HistorialDialog.cpp
     src/ui/MovimientoDialog.cpp
     src/ui/MovimientosCuentaDialog.cpp
+    src/ui/BarChartWidget.cpp
+    src/ui/ReportesDialog.cpp
 )
 
 target_include_directories(Mani PRIVATE src)

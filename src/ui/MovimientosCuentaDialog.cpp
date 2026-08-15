@@ -30,8 +30,8 @@ MovimientosCuentaDialog::MovimientosCuentaDialog(Database *database, const Cuent
     auto *intro = new QLabel(tr("Mes: %1 — Moneda: %2").arg(mes, monedaLabel(cuenta.moneda)), this);
 
     m_table = new QTableWidget(this);
-    m_table->setColumnCount(3);
-    m_table->setHorizontalHeaderLabels({tr("Fecha"), tr("Concepto"), tr("Monto")});
+    m_table->setColumnCount(4);
+    m_table->setHorizontalHeaderLabels({tr("Fecha"), tr("Concepto"), tr("Categoría"), tr("Monto")});
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -68,7 +68,10 @@ void MovimientosCuentaDialog::populateTable()
         fechaItem->setData(Qt::UserRole, movimiento.id);
         m_table->setItem(row, 0, fechaItem);
         m_table->setItem(row, 1, new QTableWidgetItem(movimiento.concepto));
-        m_table->setItem(row, 2, new QTableWidgetItem(formatMoney(movimiento.monto)));
+        const QString categoriaTexto =
+            movimiento.categoria.isEmpty() ? tr("Sin categoría") : movimiento.categoria;
+        m_table->setItem(row, 2, new QTableWidgetItem(categoriaTexto));
+        m_table->setItem(row, 3, new QTableWidgetItem(formatMoney(movimiento.monto)));
     }
 
     m_table->resizeColumnsToContents();
@@ -77,7 +80,7 @@ void MovimientosCuentaDialog::populateTable()
 void MovimientosCuentaDialog::onAgregar()
 {
     const std::vector<Cuenta> cuentas = {m_cuenta};
-    MovimientoDialog dialog(cuentas, m_fechaDefault, this);
+    MovimientoDialog dialog(cuentas, m_fechaDefault, m_database->categoriasConocidas(), this);
     dialog.setCuentaId(m_cuenta.id);
 
     if (dialog.exec() != QDialog::Accepted) {
@@ -85,7 +88,7 @@ void MovimientosCuentaDialog::onAgregar()
     }
 
     if (!m_database->crearMovimiento(dialog.cuentaId(), dialog.fecha(), dialog.montoCentavos(),
-                                     dialog.concepto())) {
+                                     dialog.concepto(), dialog.categoria())) {
         QMessageBox::critical(this, tr("Error"), m_database->lastError());
         return;
     }

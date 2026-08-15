@@ -6,6 +6,7 @@
 #include "ui/HistorialDialog.h"
 #include "ui/MovimientoDialog.h"
 #include "ui/MovimientosCuentaDialog.h"
+#include "ui/ReportesDialog.h"
 #include "ui/TotalesPanelWidget.h"
 #include "util/MesActivo.h"
 #include "util/Totales.h"
@@ -44,6 +45,7 @@ MainWindow::MainWindow(Database *database, QWidget *parent)
     m_nuevoMovimientoAction = toolbar->addAction(tr("Nuevo movimiento"));
     connect(m_nuevoMovimientoAction, &QAction::triggered, this, &MainWindow::onNuevoMovimiento);
     toolbar->addAction(tr("Historial"), this, &MainWindow::onVerHistorial);
+    toolbar->addAction(tr("Reportes"), this, &MainWindow::onVerReportes);
 
     auto *central = new QWidget(this);
     auto *rootLayout = new QVBoxLayout(central);
@@ -264,13 +266,14 @@ void MainWindow::onNuevoMovimiento()
         return;
     }
 
-    MovimientoDialog dialog(m_cuentas, fechaDefaultParaMes(m_mesSeleccionado), this);
+    MovimientoDialog dialog(m_cuentas, fechaDefaultParaMes(m_mesSeleccionado),
+                            m_database->categoriasConocidas(), this);
     if (dialog.exec() != QDialog::Accepted) {
         return;
     }
 
     if (!m_database->crearMovimiento(dialog.cuentaId(), dialog.fecha(), dialog.montoCentavos(),
-                                     dialog.concepto())) {
+                                     dialog.concepto(), dialog.categoria())) {
         QMessageBox::critical(this, tr("Error"), m_database->lastError());
         return;
     }
@@ -328,6 +331,12 @@ void MainWindow::onVerHistorial()
 {
     HistorialDialog dialog(m_database, m_mesSeleccionado, this);
     connect(&dialog, &HistorialDialog::mesSeleccionado, this, &MainWindow::irAMes);
+    dialog.exec();
+}
+
+void MainWindow::onVerReportes()
+{
+    ReportesDialog dialog(m_database, m_mesSeleccionado, this);
     dialog.exec();
 }
 

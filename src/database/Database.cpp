@@ -46,7 +46,7 @@ bool Database::open(const QString &path)
         return false;
     }
 
-    return initializeSchema();
+    return initializeSchema() && migrateSchema();
 }
 
 void Database::ensureMesActivo(const QString &mes)
@@ -211,7 +211,7 @@ bool Database::eliminarCuenta(std::int64_t id)
 }
 
 bool Database::crearMovimiento(std::int64_t cuentaId, const QDate &fecha, std::int64_t montoCentavos,
-                               const QString &concepto)
+                               const QString &concepto, const QString &categoria)
 {
     if (!fecha.isValid() || montoCentavos == 0) {
         m_lastError = QStringLiteral("Movimiento invalido.");
@@ -219,6 +219,7 @@ bool Database::crearMovimiento(std::int64_t cuentaId, const QDate &fecha, std::i
     }
 
     const QString mes = fecha.toString(QStringLiteral("yyyy-MM"));
+    const QString categoriaNormalizada = categoria.trimmed();
     QSqlDatabase db = QSqlDatabase::database(m_connectionName);
 
     if (!db.transaction()) {
@@ -233,13 +234,15 @@ bool Database::crearMovimiento(std::int64_t cuentaId, const QDate &fecha, std::i
 
     QSqlQuery insertMovimiento(db);
     insertMovimiento.prepare(QStringLiteral(
-        "INSERT INTO movimiento (cuenta_id, mes, fecha, monto, concepto) "
-        "VALUES (:cuenta_id, :mes, :fecha, :monto, :concepto)"));
+        "INSERT INTO movimiento (cuenta_id, mes, fecha, monto, concepto, categoria) "
+        "VALUES (:cuenta_id, :mes, :fecha, :monto, :concepto, :categoria)"));
     insertMovimiento.bindValue(QStringLiteral(":cuenta_id"), cuentaId);
     insertMovimiento.bindValue(QStringLiteral(":mes"), mes);
     insertMovimiento.bindValue(QStringLiteral(":fecha"), fecha.toString(Qt::ISODate));
     insertMovimiento.bindValue(QStringLiteral(":monto"), montoCentavos);
     insertMovimiento.bindValue(QStringLiteral(":concepto"), concepto);
+    insertMovimiento.bindValue(QStringLiteral(":categoria"),
+                               categoriaNormalizada.isEmpty() ? QVariant() : categoriaNormalizada);
 
     if (!insertMovimiento.exec()) {
         m_lastError = insertMovimiento.lastError().text();
@@ -312,7 +315,7 @@ std::vector<Movimiento> Database::movimientosDeCuenta(std::int64_t cuentaId, con
     QSqlDatabase db = QSqlDatabase::database(m_connectionName);
     QSqlQuery query(db);
     query.prepare(QStringLiteral(
-        "SELECT m.id, m.cuenta_id, m.mes, m.fecha, m.monto, m.concepto, c.moneda "
+        "SELECT m.id, m.cuenta_id, m.mes, m.fecha, m.monto, m.concepto, m.categoria, c.moneda "
         "FROM movimiento m "
         "INNER JOIN cuenta c ON c.id = m.cuenta_id "
         "WHERE m.cuenta_id = :cuenta_id AND m.mes = :mes "
@@ -333,11 +336,68 @@ std::vector<Movimiento> Database::movimientosDeCuenta(std::int64_t cuentaId, con
         movimiento.fecha = QDate::fromString(query.value(3).toString(), Qt::ISODate);
         movimiento.monto = query.value(4).toLongLong();
         movimiento.concepto = query.value(5).toString();
-        movimiento.moneda = monedaFromInt(query.value(6).toInt());
+        movimiento.categoria = query.value(6).toString();
+        movimiento.moneda = monedaFromInt(query.value(7).toInt());
         movimientos.push_back(movimiento);
     }
 
     return movimientos;
+}
+
+QStringList Database::categoriasConocidas()
+{
+    QStringList categorias;
+
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+    QSqlQuery query(db);
+    if (!query.exec(QStringLiteral(
+            "SELECT DISTINCT categoria FROM movimiento "
+            "WHERE categoria IS NOT NULL AND TRIM(categoria) != '' "
+            "ORDER BY categoria COLLATE NOCASE"))) {
+        m_lastError = query.lastError().text();
+        return categorias;
+    }
+
+    while (query.next()) {
+        categorias.append(query.value(0).toString());
+    }
+
+    return categorias;
+}
+
+std::vector<GastoCategoria> Database::gastoPorCategoria(const QString &mes, Moneda moneda)
+{
+    std::vector<GastoCategoria> gastos;
+
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+    QSqlQuery query(db);
+    query.prepare(QStringLiteral(
+        "SELECT CASE "
+        "WHEN m.categoria IS NULL OR TRIM(m.categoria) = '' THEN :sin_categoria "
+        "ELSE m.categoria END, "
+        "SUM(ABS(m.monto)) "
+        "FROM movimiento m "
+        "INNER JOIN cuenta c ON c.id = m.cuenta_id "
+        "WHERE m.mes = :mes AND c.moneda = :moneda AND m.monto < 0 "
+        "GROUP BY 1 "
+        "ORDER BY 2 DESC"));
+    query.bindValue(QStringLiteral(":sin_categoria"), QStringLiteral("Sin categoría"));
+    query.bindValue(QStringLiteral(":mes"), mes);
+    query.bindValue(QStringLiteral(":moneda"), static_cast<int>(moneda));
+
+    if (!query.exec()) {
+        m_lastError = query.lastError().text();
+        return gastos;
+    }
+
+    while (query.next()) {
+        GastoCategoria gasto;
+        gasto.categoria = query.value(0).toString();
+        gasto.totalCentavos = query.value(1).toLongLong();
+        gastos.push_back(gasto);
+    }
+
+    return gastos;
 }
 
 std::optional<std::int64_t> Database::tasaCambio(const QString &mes)
@@ -465,6 +525,7 @@ bool Database::initializeSchema()
             "fecha TEXT NOT NULL,"
             "monto INTEGER NOT NULL,"
             "concepto TEXT NOT NULL,"
+            "categoria TEXT,"
             "FOREIGN KEY (cuenta_id) REFERENCES cuenta(id) ON DELETE CASCADE"
             ")"),
     };
@@ -474,6 +535,43 @@ bool Database::initializeSchema()
             m_lastError = query.lastError().text();
             return false;
         }
+    }
+
+    return true;
+}
+
+bool Database::migrateSchema()
+{
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+    QSqlQuery info(db);
+    if (!info.exec(QStringLiteral("PRAGMA table_info(movimiento)"))) {
+        m_lastError = info.lastError().text();
+        return false;
+    }
+
+    bool hasCategoria = false;
+    while (info.next()) {
+        if (info.value(1).toString() == QStringLiteral("categoria")) {
+            hasCategoria = true;
+            break;
+        }
+    }
+
+    if (!hasCategoria) {
+        QSqlQuery alter(db);
+        if (!alter.exec(QStringLiteral("ALTER TABLE movimiento ADD COLUMN categoria TEXT"))) {
+            m_lastError = alter.lastError().text();
+            return false;
+        }
+    }
+
+    // Movimientos de Fase 4: copiar concepto a categoría si no tenían una.
+    QSqlQuery backfill(db);
+    if (!backfill.exec(QStringLiteral(
+            "UPDATE movimiento SET categoria = concepto "
+            "WHERE (categoria IS NULL OR TRIM(categoria) = '') AND TRIM(concepto) != ''"))) {
+        m_lastError = backfill.lastError().text();
+        return false;
     }
 
     return true;

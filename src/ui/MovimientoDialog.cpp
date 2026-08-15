@@ -12,11 +12,11 @@
 #include <QVBoxLayout>
 
 MovimientoDialog::MovimientoDialog(const std::vector<Cuenta> &cuentas, const QDate &fechaDefault,
-                                   QWidget *parent)
+                                   const QStringList &categorias, QWidget *parent)
     : QDialog(parent)
 {
     setWindowTitle(tr("Nuevo movimiento"));
-    resize(420, 260);
+    resize(420, 300);
 
     m_cuentaCombo = new QComboBox(this);
     for (const Cuenta &cuenta : cuentas) {
@@ -28,6 +28,13 @@ MovimientoDialog::MovimientoDialog(const std::vector<Cuenta> &cuentas, const QDa
     m_tipoCombo = new QComboBox(this);
     m_tipoCombo->addItem(tr("Ingreso"), static_cast<int>(Tipo::Ingreso));
     m_tipoCombo->addItem(tr("Egreso"), static_cast<int>(Tipo::Egreso));
+
+    m_categoriaCombo = new QComboBox(this);
+    m_categoriaCombo->setEditable(true);
+    m_categoriaCombo->addItem(tr("Sin categoría"), QString());
+    for (const QString &categoria : categorias) {
+        m_categoriaCombo->addItem(categoria, categoria);
+    }
 
     m_fechaEdit = new QDateEdit(fechaDefault, this);
     m_fechaEdit->setCalendarPopup(true);
@@ -45,6 +52,7 @@ MovimientoDialog::MovimientoDialog(const std::vector<Cuenta> &cuentas, const QDa
     form->addRow(tr("Fecha"), m_fechaEdit);
     form->addRow(tr("Monto"), m_montoEdit);
     form->addRow(tr("Concepto"), m_conceptoEdit);
+    form->addRow(tr("Categoría"), m_categoriaCombo);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     connect(buttons, &QDialogButtonBox::accepted, this, &MovimientoDialog::accept);
@@ -93,6 +101,15 @@ std::int64_t MovimientoDialog::montoCentavos() const
 QString MovimientoDialog::concepto() const
 {
     return m_conceptoEdit->text().trimmed();
+}
+
+QString MovimientoDialog::categoria() const
+{
+    const QString texto = m_categoriaCombo->currentText().trimmed();
+    if (texto.isEmpty() || texto == tr("Sin categoría")) {
+        return {};
+    }
+    return texto;
 }
 
 void MovimientoDialog::accept()

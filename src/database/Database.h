@@ -1,6 +1,7 @@
 #pragma once
 
 #include "model/Cuenta.h"
+#include "model/GastoCategoria.h"
 #include "model/Movimiento.h"
 #include "model/ResumenMes.h"
 
@@ -30,9 +31,12 @@ public:
     bool eliminarCuenta(std::int64_t id);
 
     bool crearMovimiento(std::int64_t cuentaId, const QDate &fecha, std::int64_t montoCentavos,
-                         const QString &concepto);
+                         const QString &concepto, const QString &categoria = {});
     bool eliminarMovimiento(std::int64_t movimientoId);
     std::vector<Movimiento> movimientosDeCuenta(std::int64_t cuentaId, const QString &mes);
+
+    QStringList categoriasConocidas();
+    std::vector<GastoCategoria> gastoPorCategoria(const QString &mes, Moneda moneda);
 
     std::optional<std::int64_t> tasaCambio(const QString &mes);
     bool guardarTasaCambio(const QString &mes, std::int64_t usdAArsCentavos);
@@ -44,6 +48,7 @@ public:
 
 private:
     bool initializeSchema();
+    bool migrateSchema();
     bool insertSaldoMes(std::int64_t cuentaId, const QString &mes, std::int64_t saldoInicial,
                         std::int64_t saldoActual);
     bool ensureSaldoMesForCuenta(std::int64_t cuentaId, const QString &mes);
