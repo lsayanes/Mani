@@ -15,8 +15,10 @@ qt_add_executable(Mani
     src/util/Money.cpp
     src/util/AppPaths.cpp
     src/util/MesActivo.cpp
+    src/util/Totales.cpp
     src/ui/CuentaDialog.cpp
     src/ui/CuentaCardWidget.cpp
+    src/ui/TotalesPanelWidget.cpp
 )
 
 target_include_directories(Mani PRIVATE src)

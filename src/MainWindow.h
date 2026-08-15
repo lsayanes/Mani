@@ -9,6 +9,8 @@ class QPushButton;
 class QVBoxLayout;
 class QWidget;
 
+class TotalesPanelWidget;
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -20,9 +22,11 @@ private slots:
     void onNuevaCuenta();
     void onEditarCuenta(std::int64_t cuentaId);
     void onBorrarCuenta(std::int64_t cuentaId);
+    void onTasaGuardada(std::int64_t usdAArsCentavos);
 
 private:
     void refresh();
+    void clearColumnCards(QVBoxLayout *layout);
     Cuenta *findCuenta(std::int64_t cuentaId);
 
     Database *m_database = nullptr;
@@ -36,4 +40,5 @@ private:
     QWidget *m_arsColumn = nullptr;
     QVBoxLayout *m_usdLayout = nullptr;
     QVBoxLayout *m_arsLayout = nullptr;
+    TotalesPanelWidget *m_totalesPanel = nullptr;
 };

@@ -210,6 +210,43 @@ bool Database::eliminarCuenta(std::int64_t id)
     return true;
 }
 
+std::optional<std::int64_t> Database::tasaCambio(const QString &mes)
+{
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+    QSqlQuery query(db);
+    query.prepare(QStringLiteral("SELECT usd_a_ars FROM tasa_cambio WHERE mes = :mes"));
+    query.bindValue(QStringLiteral(":mes"), mes);
+
+    if (!query.exec()) {
+        m_lastError = query.lastError().text();
+        return std::nullopt;
+    }
+
+    if (!query.next()) {
+        return std::nullopt;
+    }
+
+    return query.value(0).toLongLong();
+}
+
+bool Database::guardarTasaCambio(const QString &mes, std::int64_t usdAArsCentavos)
+{
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+    QSqlQuery query(db);
+    query.prepare(QStringLiteral(
+        "INSERT INTO tasa_cambio (mes, usd_a_ars) VALUES (:mes, :usd_a_ars) "
+        "ON CONFLICT(mes) DO UPDATE SET usd_a_ars = excluded.usd_a_ars"));
+    query.bindValue(QStringLiteral(":mes"), mes);
+    query.bindValue(QStringLiteral(":usd_a_ars"), usdAArsCentavos);
+
+    if (!query.exec()) {
+        m_lastError = query.lastError().text();
+        return false;
+    }
+
+    return true;
+}
+
 QString Database::lastError() const
 {
     return m_lastError;

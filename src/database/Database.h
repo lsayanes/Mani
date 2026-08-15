@@ -2,6 +2,7 @@
 
 #include "model/Cuenta.h"
 
+#include <optional>
 #include <vector>
 
 #include <QObject>
@@ -23,6 +24,9 @@ public:
     bool actualizarCuenta(std::int64_t id, const QString &nombre, std::int64_t saldoInicialCentavos,
                           std::int64_t saldoActualCentavos, const QString &mes);
     bool eliminarCuenta(std::int64_t id);
+
+    std::optional<std::int64_t> tasaCambio(const QString &mes);
+    bool guardarTasaCambio(const QString &mes, std::int64_t usdAArsCentavos);
 
     QString lastError() const;
 

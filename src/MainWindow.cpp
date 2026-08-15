@@ -3,7 +3,9 @@
 #include "model/Moneda.h"
 #include "ui/CuentaCardWidget.h"
 #include "ui/CuentaDialog.h"
+#include "ui/TotalesPanelWidget.h"
 #include "util/MesActivo.h"
+#include "util/Totales.h"
 
 #include <QFrame>
 #include <QHBoxLayout>
@@ -13,6 +15,8 @@
 #include <QScrollArea>
 #include <QToolBar>
 #include <QVBoxLayout>
+
+#include <optional>
 
 MainWindow::MainWindow(Database *database, QWidget *parent)
     : QMainWindow(parent)
@@ -104,10 +108,24 @@ MainWindow::MainWindow(Database *database, QWidget *parent)
     columnsLayout->addWidget(makeColumnScroll(m_arsColumn), 1);
     contentLayout->addLayout(columnsLayout, 1);
 
+    m_totalesPanel = new TotalesPanelWidget(this);
+    connect(m_totalesPanel, &TotalesPanelWidget::tasaGuardada, this, &MainWindow::onTasaGuardada);
+    contentLayout->addWidget(m_totalesPanel);
+
     rootLayout->addWidget(m_welcomeWidget, 1);
     rootLayout->addWidget(m_contentWidget, 1);
 
     setCentralWidget(central);
+    refresh();
+}
+
+void MainWindow::onTasaGuardada(std::int64_t usdAArsCentavos)
+{
+    if (!m_database->guardarTasaCambio(m_mesActivo, usdAArsCentavos)) {
+        QMessageBox::critical(this, tr("Error"), m_database->lastError());
+        return;
+    }
+
     refresh();
 }
 
@@ -182,19 +200,8 @@ void MainWindow::refresh()
     m_welcomeWidget->setVisible(!hasCuentas);
     m_contentWidget->setVisible(hasCuentas);
 
-    while (QLayoutItem *item = m_usdLayout->takeAt(1)) {
-        if (QWidget *widget = item->widget()) {
-            widget->deleteLater();
-        }
-        delete item;
-    }
-
-    while (QLayoutItem *item = m_arsLayout->takeAt(1)) {
-        if (QWidget *widget = item->widget()) {
-            widget->deleteLater();
-        }
-        delete item;
-    }
+    clearColumnCards(m_usdLayout);
+    clearColumnCards(m_arsLayout);
 
     for (const Cuenta &cuenta : m_cuentas) {
         auto *card = new CuentaCardWidget(cuenta, this);
@@ -206,6 +213,25 @@ void MainWindow::refresh()
         } else {
             m_arsLayout->insertWidget(m_arsLayout->count() - 1, card);
         }
+    }
+
+    const TotalesMes totales = calcularTotales(m_cuentas);
+    const std::optional<std::int64_t> tasa = m_database->tasaCambio(m_mesActivo);
+
+    m_totalesPanel->setTasa(tasa);
+    m_totalesPanel->setTotales(totales, tasa);
+}
+
+void MainWindow::clearColumnCards(QVBoxLayout *layout)
+{
+    // Conserva titulo (indice 0) y stretch (ultimo).
+    while (layout->count() > 2) {
+        QLayoutItem *item = layout->takeAt(1);
+        if (QWidget *widget = item->widget()) {
+            widget->hide();
+            widget->deleteLater();
+        }
+        delete item;
     }
 }
 

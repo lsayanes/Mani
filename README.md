@@ -15,7 +15,13 @@ Especificación completa del producto: [`mani.md`](mani.md).
 - Persistencia local; la base se crea en el primer arranque.
 - Pantalla de bienvenida cuando no hay cuentas cargadas.
 
-Próximas fases (ver `mani.md`): totales y tipo de cambio, historial mensual, movimientos, categorías y reportes, export/backup.
+**Fase 2** implementada:
+
+- Tipo de cambio USD → ARS editable por mes (`1 USD = $ …`).
+- Totales al pie: saldo **actual** y **gastado** en USD/ARS, más consolidado en pesos.
+- El consolidado se muestra solo cuando hay tasa cargada para el mes activo.
+
+Próximas fases (ver `mani.md`): historial mensual, movimientos, categorías y reportes, export/backup.
 
 ## Requisitos
 
