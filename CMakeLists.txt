@@ -8,12 +8,19 @@ set(CMAKE_AUTOMOC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
 
+set(MANI_PLATFORM_SOURCES src/platform/TouchIdAuth_stub.cpp)
+if(APPLE)
+    set(MANI_PLATFORM_SOURCES src/platform/TouchIdAuth_mac.mm)
+endif()
+
 qt_add_executable(Mani
     src/main.cpp
     src/MainWindow.cpp
     src/database/Database.cpp
     src/util/Money.cpp
     src/util/AppPaths.cpp
+    src/util/AppLock.cpp
+    src/util/CsvIO.cpp
     src/util/MesActivo.cpp
     src/util/Totales.cpp
     src/ui/CuentaDialog.cpp
@@ -24,6 +31,9 @@ qt_add_executable(Mani
     src/ui/MovimientosCuentaDialog.cpp
     src/ui/BarChartWidget.cpp
     src/ui/ReportesDialog.cpp
+    src/ui/LockDialog.cpp
+    src/ui/PasswordConfigDialog.cpp
+    ${MANI_PLATFORM_SOURCES}
 )
 
 target_include_directories(Mani PRIVATE src)
@@ -32,4 +42,5 @@ target_link_libraries(Mani PRIVATE Qt6::Widgets Qt6::Sql)
 
 if(APPLE)
     set_target_properties(Mani PROPERTIES MACOSX_BUNDLE TRUE)
+    target_link_libraries(Mani PRIVATE "-framework LocalAuthentication")
 endif()

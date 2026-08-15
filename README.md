@@ -42,7 +42,15 @@ Especificación completa del producto: [`mani.md`](mani.md).
   - **Por categoría**: gasto de egresos del mes en USD y ARS (tabla + gráfico de barras).
   - **Por mes**: comparativa de gastos mensuales (tabla + gráfico consolidado cuando hay tasa).
 
-Próximas fases (ver `mani.md`): export/backup y bloqueo de la app.
+**Fase 6** implementada:
+
+- Menú **Datos**: exportar e importar CSV (cuentas, saldos, movimientos, tasas).
+- **Copia de respaldo** y **Restaurar respaldo** (archivo `.db` en carpeta de backups).
+- Menú **Seguridad**: contraseña de bloqueo (hash SHA256 + salt en QSettings).
+- **Touch ID** en macOS para desbloquear (si está disponible).
+- Pantalla de bloqueo al iniciar y acción **Bloquear ahora**.
+
+Próximas fases (ver `mani.md`): refinamientos y plataformas móviles.
 
 ## Requisitos
 
@@ -84,6 +92,12 @@ La base SQLite se crea automáticamente en:
 ~/Library/Application Support/Mani/Mani/mani.db
 ```
 
+Las copias de respaldo se guardan por defecto en:
+
+```text
+~/Library/Application Support/Mani/Mani/backups/
+```
+
 No hace falta crear archivos ni carpetas a mano.
 
 ## Estructura del proyecto
@@ -98,8 +112,9 @@ Mani/
     ├── MainWindow.*     # Pantalla principal
     ├── database/        # SQLite (cuenta, saldo_mes, tasa_cambio)
     ├── model/           # Moneda, Cuenta
-    ├── ui/              # Diálogos y tarjetas de cuenta
-    └── util/            # Formato de montos, mes activo, rutas
+    ├── ui/              # Diálogos, tarjetas, reportes, bloqueo
+    ├── platform/        # Touch ID (macOS)
+    └── util/            # Montos, mes activo, rutas, CSV, bloqueo
 ```
 
 ## Convenciones

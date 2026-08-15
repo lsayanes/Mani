@@ -33,6 +33,12 @@ private slots:
     void onMesComboChanged(int index);
     void onVerHistorial();
     void onVerReportes();
+    void onExportarCsv();
+    void onImportarCsv();
+    void onCopiaRespaldo();
+    void onRestaurarRespaldo();
+    void onConfigurarBloqueo();
+    void onBloquearAhora();
 
 private:
     void refresh();
@@ -40,6 +46,7 @@ private:
     void clearColumnCards(QVBoxLayout *layout);
     void irAMes(const QString &mes);
     bool esMesCalendarioActual() const;
+    bool solicitarDesbloqueo();
     Cuenta *findCuenta(std::int64_t cuentaId);
 
     Database *m_database = nullptr;

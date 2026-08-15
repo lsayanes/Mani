@@ -1,13 +1,16 @@
 #include "MainWindow.h"
 #include "database/Database.h"
+#include "ui/LockDialog.h"
 
 #include <QApplication>
+#include <QDialog>
 #include <QLibraryInfo>
 #include <QLocale>
 #include <QMessageBox>
 #include <QSqlDatabase>
 #include <QSqlError>
 
+#include "util/AppLock.h"
 #include "util/AppPaths.h"
 
 int main(int argc, char *argv[])
@@ -34,6 +37,13 @@ int main(int argc, char *argv[])
             nullptr, QObject::tr("Error de base de datos"),
             QObject::tr("No se pudo abrir la base de datos:\n%1").arg(database.lastError()));
         return 1;
+    }
+
+    if (AppLock::isEnabled()) {
+        LockDialog lockDialog;
+        if (lockDialog.exec() != QDialog::Accepted) {
+            return 0;
+        }
     }
 
     MainWindow window(&database);

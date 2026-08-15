@@ -44,6 +44,15 @@ public:
     QStringList mesesConDatos();
     std::vector<ResumenMes> resumenHistorico();
 
+    bool exportCsv(const QString &directoryPath);
+    bool importCsv(const QString &directoryPath);
+    bool backupToFile(const QString &destinationPath);
+    bool restoreFromFile(const QString &sourcePath);
+
+    void close();
+    QString dbPath() const;
+    bool isOpen() const;
+
     QString lastError() const;
 
 private:
@@ -54,7 +63,9 @@ private:
     bool ensureSaldoMesForCuenta(std::int64_t cuentaId, const QString &mes);
     bool aplicarMontoSaldo(std::int64_t cuentaId, const QString &mes, std::int64_t deltaCentavos);
     std::int64_t saldoActualDelMesAnterior(std::int64_t cuentaId, const QString &mes);
+    bool reopen();
 
     QString m_connectionName;
+    QString m_dbPath;
     QString m_lastError;
 };

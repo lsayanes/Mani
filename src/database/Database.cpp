@@ -3,11 +3,15 @@
 #include <QDate>
 #include <QDateTime>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QSqlRecord>
 #include <QUuid>
+
+#include "util/CsvIO.h"
 
 namespace {
 
@@ -34,6 +38,7 @@ bool Database::open(const QString &path)
 
     QSqlDatabase db = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), m_connectionName);
     db.setDatabaseName(path);
+    m_dbPath = path;
 
     if (!db.open()) {
         m_lastError = db.lastError().text();
@@ -483,6 +488,286 @@ std::vector<ResumenMes> Database::resumenHistorico()
     }
 
     return resumenes;
+}
+
+void Database::close()
+{
+    if (m_connectionName.isEmpty()) {
+        return;
+    }
+
+    {
+        QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+        if (db.isOpen()) {
+            db.close();
+        }
+    }
+
+    QSqlDatabase::removeDatabase(m_connectionName);
+    m_connectionName.clear();
+}
+
+bool Database::reopen()
+{
+    if (m_dbPath.isEmpty()) {
+        m_lastError = QStringLiteral("Ruta de base de datos no definida.");
+        return false;
+    }
+
+    if (!m_connectionName.isEmpty()) {
+        close();
+    }
+
+    m_connectionName = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    return open(m_dbPath);
+}
+
+QString Database::dbPath() const
+{
+    return m_dbPath;
+}
+
+bool Database::isOpen() const
+{
+    if (m_connectionName.isEmpty()) {
+        return false;
+    }
+    return QSqlDatabase::database(m_connectionName).isOpen();
+}
+
+bool Database::exportCsv(const QString &directoryPath)
+{
+    QDir dir(directoryPath);
+    if (!dir.exists() && !dir.mkpath(QStringLiteral("."))) {
+        m_lastError = QStringLiteral("No se pudo crear el directorio de exportacion.");
+        return false;
+    }
+
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+
+    auto writeTable = [&](const QString &fileName, const QString &sql,
+                          const QStringList &headers) -> bool {
+        QFile file(dir.filePath(fileName));
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            m_lastError = file.errorString();
+            return false;
+        }
+
+        file.write(headers.join(QLatin1Char(',')).toUtf8());
+        file.write("\n");
+
+        QSqlQuery query(db);
+        if (!query.exec(sql)) {
+            m_lastError = query.lastError().text();
+            return false;
+        }
+
+        while (query.next()) {
+            QStringList row;
+            for (int i = 0; i < query.record().count(); ++i) {
+                row.append(csvEscape(query.value(i).toString()));
+            }
+            file.write(row.join(QLatin1Char(',')).toUtf8());
+            file.write("\n");
+        }
+        return true;
+    };
+
+    if (!writeTable(QStringLiteral("cuentas.csv"),
+                    QStringLiteral("SELECT id, nombre, moneda, creado_en FROM cuenta ORDER BY id"),
+                    {QStringLiteral("id"), QStringLiteral("nombre"), QStringLiteral("moneda"),
+                     QStringLiteral("creado_en")})) {
+        return false;
+    }
+
+    if (!writeTable(QStringLiteral("saldos_mes.csv"),
+                    QStringLiteral(
+                        "SELECT cuenta_id, mes, saldo_inicial, saldo_actual FROM saldo_mes ORDER BY mes, cuenta_id"),
+                    {QStringLiteral("cuenta_id"), QStringLiteral("mes"), QStringLiteral("saldo_inicial"),
+                     QStringLiteral("saldo_actual")})) {
+        return false;
+    }
+
+    if (!writeTable(QStringLiteral("movimientos.csv"),
+                    QStringLiteral("SELECT id, cuenta_id, mes, fecha, monto, concepto, categoria "
+                                   "FROM movimiento ORDER BY id"),
+                    {QStringLiteral("id"), QStringLiteral("cuenta_id"), QStringLiteral("mes"),
+                     QStringLiteral("fecha"), QStringLiteral("monto"), QStringLiteral("concepto"),
+                     QStringLiteral("categoria")})) {
+        return false;
+    }
+
+    if (!writeTable(QStringLiteral("tasas_cambio.csv"),
+                    QStringLiteral("SELECT mes, usd_a_ars FROM tasa_cambio ORDER BY mes"),
+                    {QStringLiteral("mes"), QStringLiteral("usd_a_ars")})) {
+        return false;
+    }
+
+    return true;
+}
+
+bool Database::importCsv(const QString &directoryPath)
+{
+    const QDir dir(directoryPath);
+    const QStringList required = {QStringLiteral("cuentas.csv"), QStringLiteral("saldos_mes.csv"),
+                                  QStringLiteral("movimientos.csv"), QStringLiteral("tasas_cambio.csv")};
+    for (const QString &fileName : required) {
+        if (!dir.exists(fileName)) {
+            m_lastError = QStringLiteral("Falta el archivo %1 en la carpeta seleccionada.").arg(fileName);
+            return false;
+        }
+    }
+
+    auto readCsvRows = [](const QString &path, QStringList &headers) -> QList<QStringList> {
+        QList<QStringList> rows;
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            return rows;
+        }
+
+        const QByteArray content = file.readAll();
+        const QStringList lines = QString::fromUtf8(content).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+        if (lines.isEmpty()) {
+            return rows;
+        }
+
+        headers = csvParseLine(lines.first());
+        for (int i = 1; i < lines.size(); ++i) {
+            rows.append(csvParseLine(lines.at(i)));
+        }
+        return rows;
+    };
+
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+    if (!db.transaction()) {
+        m_lastError = db.lastError().text();
+        return false;
+    }
+
+    QSqlQuery clearQuery(db);
+    const QStringList deletes = {
+        QStringLiteral("DELETE FROM movimiento"),
+        QStringLiteral("DELETE FROM saldo_mes"),
+        QStringLiteral("DELETE FROM tasa_cambio"),
+        QStringLiteral("DELETE FROM cuenta"),
+    };
+    for (const QString &statement : deletes) {
+        if (!clearQuery.exec(statement)) {
+            m_lastError = clearQuery.lastError().text();
+            db.rollback();
+            return false;
+        }
+    }
+
+    auto importSimple = [&](const QString &fileName, const QString &insertSql, int expectedColumns) -> bool {
+        QStringList headers;
+        const QList<QStringList> rows = readCsvRows(dir.filePath(fileName), headers);
+        QSqlQuery query(db);
+
+        for (const QStringList &row : rows) {
+            if (row.size() != expectedColumns) {
+                m_lastError = QStringLiteral("Formato invalido en %1").arg(fileName);
+                db.rollback();
+                return false;
+            }
+            query.prepare(insertSql);
+            for (int i = 0; i < expectedColumns; ++i) {
+                query.addBindValue(row.at(i).isEmpty() ? QVariant() : row.at(i));
+            }
+            if (!query.exec()) {
+                m_lastError = query.lastError().text();
+                db.rollback();
+                return false;
+            }
+        }
+        return true;
+    };
+
+    if (!importSimple(QStringLiteral("cuentas.csv"),
+                      QStringLiteral("INSERT INTO cuenta (id, nombre, moneda, creado_en) "
+                                     "VALUES (?, ?, ?, ?)"),
+                      4)) {
+        return false;
+    }
+
+    if (!importSimple(QStringLiteral("saldos_mes.csv"),
+                      QStringLiteral("INSERT INTO saldo_mes (cuenta_id, mes, saldo_inicial, saldo_actual) "
+                                     "VALUES (?, ?, ?, ?)"),
+                      4)) {
+        return false;
+    }
+
+    if (!importSimple(QStringLiteral("tasas_cambio.csv"),
+                      QStringLiteral("INSERT INTO tasa_cambio (mes, usd_a_ars) VALUES (?, ?)"), 2)) {
+        return false;
+    }
+
+    if (!importSimple(QStringLiteral("movimientos.csv"),
+                      QStringLiteral("INSERT INTO movimiento (id, cuenta_id, mes, fecha, monto, concepto, categoria) "
+                                     "VALUES (?, ?, ?, ?, ?, ?, ?)"),
+                      7)) {
+        return false;
+    }
+
+    if (!db.commit()) {
+        m_lastError = db.lastError().text();
+        return false;
+    }
+
+    return true;
+}
+
+bool Database::backupToFile(const QString &destinationPath)
+{
+    if (!isOpen()) {
+        m_lastError = QStringLiteral("La base de datos no esta abierta.");
+        return false;
+    }
+
+    const QString sourcePath = m_dbPath;
+    close();
+
+    if (QFile::exists(destinationPath) && !QFile::remove(destinationPath)) {
+        m_lastError = QStringLiteral("No se pudo reemplazar el archivo de respaldo.");
+        reopen();
+        return false;
+    }
+
+    if (!QFile::copy(sourcePath, destinationPath)) {
+        m_lastError = QStringLiteral("No se pudo copiar la base de datos.");
+        reopen();
+        return false;
+    }
+
+    return reopen();
+}
+
+bool Database::restoreFromFile(const QString &sourcePath)
+{
+    if (!QFile::exists(sourcePath)) {
+        m_lastError = QStringLiteral("El archivo de respaldo no existe.");
+        return false;
+    }
+
+    close();
+
+    if (QFile::exists(m_dbPath) && !QFile::remove(m_dbPath)) {
+        m_lastError = QStringLiteral("No se pudo reemplazar la base actual.");
+        reopen();
+        return false;
+    }
+
+    if (!QFile::copy(sourcePath, m_dbPath)) {
+        m_lastError = QStringLiteral("No se pudo restaurar la copia.");
+        reopen();
+        return false;
+    }
+
+    if (!reopen()) {
+        return false;
+    }
+
+    return true;
 }
 
 QString Database::lastError() const

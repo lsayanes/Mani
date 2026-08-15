@@ -4,3 +4,4 @@
 
 QString appDataDir();
 QString databasePath();
+QString backupsDir();

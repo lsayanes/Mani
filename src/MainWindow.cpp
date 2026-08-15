@@ -6,20 +6,28 @@
 #include "ui/HistorialDialog.h"
 #include "ui/MovimientoDialog.h"
 #include "ui/MovimientosCuentaDialog.h"
+#include "ui/LockDialog.h"
+#include "ui/PasswordConfigDialog.h"
 #include "ui/ReportesDialog.h"
 #include "ui/TotalesPanelWidget.h"
+#include "util/AppLock.h"
+#include "util/AppPaths.h"
 #include "util/MesActivo.h"
 #include "util/Totales.h"
 
 #include <QComboBox>
+#include <QDateTime>
+#include <QFileDialog>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMenuBar>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSignalBlocker>
 #include <QToolBar>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 #include <QDate>
@@ -39,6 +47,31 @@ MainWindow::MainWindow(Database *database, QWidget *parent)
 
     m_database->ensureMesActivo(mesActivoActual());
 
+    auto *exportCsvAction = new QAction(tr("Exportar CSV..."), this);
+    connect(exportCsvAction, &QAction::triggered, this, &MainWindow::onExportarCsv);
+    auto *importCsvAction = new QAction(tr("Importar CSV..."), this);
+    connect(importCsvAction, &QAction::triggered, this, &MainWindow::onImportarCsv);
+    auto *backupAction = new QAction(tr("Copia de respaldo..."), this);
+    connect(backupAction, &QAction::triggered, this, &MainWindow::onCopiaRespaldo);
+    auto *restoreAction = new QAction(tr("Restaurar respaldo..."), this);
+    connect(restoreAction, &QAction::triggered, this, &MainWindow::onRestaurarRespaldo);
+
+    auto *menuDatos = menuBar()->addMenu(tr("Datos"));
+    menuDatos->addAction(exportCsvAction);
+    menuDatos->addAction(importCsvAction);
+    menuDatos->addSeparator();
+    menuDatos->addAction(backupAction);
+    menuDatos->addAction(restoreAction);
+
+    auto *configLockAction = new QAction(tr("Configurar bloqueo..."), this);
+    connect(configLockAction, &QAction::triggered, this, &MainWindow::onConfigurarBloqueo);
+    auto *lockNowAction = new QAction(tr("Bloquear ahora"), this);
+    connect(lockNowAction, &QAction::triggered, this, &MainWindow::onBloquearAhora);
+
+    auto *menuSeguridad = menuBar()->addMenu(tr("Seguridad"));
+    menuSeguridad->addAction(configLockAction);
+    menuSeguridad->addAction(lockNowAction);
+
     auto *toolbar = addToolBar(tr("Acciones"));
     m_nuevaCuentaAction = toolbar->addAction(tr("Nueva cuenta"));
     connect(m_nuevaCuentaAction, &QAction::triggered, this, &MainWindow::onNuevaCuenta);
@@ -46,6 +79,27 @@ MainWindow::MainWindow(Database *database, QWidget *parent)
     connect(m_nuevoMovimientoAction, &QAction::triggered, this, &MainWindow::onNuevoMovimiento);
     toolbar->addAction(tr("Historial"), this, &MainWindow::onVerHistorial);
     toolbar->addAction(tr("Reportes"), this, &MainWindow::onVerReportes);
+
+    auto addMenuButton = [&](const QString &label, std::initializer_list<QAction *> actions) {
+        auto *menu = new QMenu(this);
+        for (QAction *action : actions) {
+            if (action == nullptr) {
+                menu->addSeparator();
+            } else {
+                menu->addAction(action);
+            }
+        }
+
+        auto *button = new QToolButton(this);
+        button->setText(label);
+        button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+        button->setPopupMode(QToolButton::InstantPopup);
+        button->setMenu(menu);
+        toolbar->addWidget(button);
+    };
+
+    addMenuButton(tr("Datos"), {exportCsvAction, importCsvAction, nullptr, backupAction, restoreAction});
+    addMenuButton(tr("Seguridad"), {configLockAction, lockNowAction});
 
     auto *central = new QWidget(this);
     auto *rootLayout = new QVBoxLayout(central);
@@ -338,6 +392,125 @@ void MainWindow::onVerReportes()
 {
     ReportesDialog dialog(m_database, m_mesSeleccionado, this);
     dialog.exec();
+}
+
+void MainWindow::onExportarCsv()
+{
+    const QString directory = QFileDialog::getExistingDirectory(
+        this, tr("Exportar CSV"), appDataDir(), QFileDialog::ShowDirsOnly);
+    if (directory.isEmpty()) {
+        return;
+    }
+
+    if (!m_database->exportCsv(directory)) {
+        QMessageBox::critical(this, tr("Error"), m_database->lastError());
+        return;
+    }
+
+    QMessageBox::information(
+        this, tr("Exportacion completa"),
+        tr("Se exportaron cuentas, saldos, movimientos y tasas a:\n%1").arg(directory));
+}
+
+void MainWindow::onImportarCsv()
+{
+    const auto answer = QMessageBox::warning(
+        this, tr("Importar CSV"),
+        tr("Esta accion reemplazara todos los datos actuales.\nQueres continuar?"),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (answer != QMessageBox::Yes) {
+        return;
+    }
+
+    const QString directory = QFileDialog::getExistingDirectory(
+        this, tr("Importar CSV"), appDataDir(), QFileDialog::ShowDirsOnly);
+    if (directory.isEmpty()) {
+        return;
+    }
+
+    if (!m_database->importCsv(directory)) {
+        QMessageBox::critical(this, tr("Error"), m_database->lastError());
+        return;
+    }
+
+    refresh();
+    QMessageBox::information(this, tr("Importacion completa"), tr("Los datos se importaron correctamente."));
+}
+
+void MainWindow::onCopiaRespaldo()
+{
+    const QString defaultName =
+        backupsDir() + QStringLiteral("/mani_backup_") +
+        QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss")) + QStringLiteral(".db");
+
+    const QString destination = QFileDialog::getSaveFileName(
+        this, tr("Copia de respaldo"), defaultName, tr("Base SQLite (*.db)"));
+    if (destination.isEmpty()) {
+        return;
+    }
+
+    if (!m_database->backupToFile(destination)) {
+        QMessageBox::critical(this, tr("Error"), m_database->lastError());
+        return;
+    }
+
+    QMessageBox::information(this, tr("Respaldo creado"), tr("Copia guardada en:\n%1").arg(destination));
+    refresh();
+}
+
+void MainWindow::onRestaurarRespaldo()
+{
+    const auto answer = QMessageBox::warning(
+        this, tr("Restaurar respaldo"),
+        tr("Esta accion reemplazara la base actual con la copia seleccionada.\nQueres continuar?"),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (answer != QMessageBox::Yes) {
+        return;
+    }
+
+    const QString source = QFileDialog::getOpenFileName(
+        this, tr("Restaurar respaldo"), backupsDir(), tr("Base SQLite (*.db)"));
+    if (source.isEmpty()) {
+        return;
+    }
+
+    if (!m_database->restoreFromFile(source)) {
+        QMessageBox::critical(this, tr("Error"), m_database->lastError());
+        return;
+    }
+
+    refresh();
+    QMessageBox::information(this, tr("Restauracion completa"), tr("La base se restauro correctamente."));
+}
+
+void MainWindow::onConfigurarBloqueo()
+{
+    PasswordConfigDialog dialog(this);
+    dialog.exec();
+}
+
+void MainWindow::onBloquearAhora()
+{
+    if (!AppLock::isEnabled()) {
+        QMessageBox::information(this, tr("Bloqueo"),
+                               tr("Primero configura una contraseña en Seguridad → Configurar bloqueo."));
+        return;
+    }
+
+    hide();
+    if (!solicitarDesbloqueo()) {
+        close();
+        return;
+    }
+    show();
+    raise();
+    activateWindow();
+}
+
+bool MainWindow::solicitarDesbloqueo()
+{
+    LockDialog dialog(nullptr);
+    return dialog.exec() == QDialog::Accepted;
 }
 
 void MainWindow::refresh()

@@ -14,3 +14,10 @@ QString databasePath()
 {
     return appDataDir() + QStringLiteral("/mani.db");
 }
+
+QString backupsDir()
+{
+    const QString dir = appDataDir() + QStringLiteral("/backups");
+    QDir().mkpath(dir);
+    return dir;
+}
