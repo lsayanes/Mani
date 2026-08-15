@@ -17,13 +17,17 @@ CuentaCardWidget::CuentaCardWidget(const Cuenta &cuenta, QWidget *parent)
     m_nombreLabel->setFont(nombreFont);
 
     auto *editButton = new QPushButton(tr("Editar"), this);
+    auto *movimientosButton = new QPushButton(tr("Movimientos"), this);
     auto *deleteButton = new QPushButton(tr("Borrar"), this);
 
     connect(editButton, &QPushButton::clicked, this, [this]() { emit editRequested(m_cuenta.id); });
+    connect(movimientosButton, &QPushButton::clicked, this,
+            [this]() { emit movimientosRequested(m_cuenta.id); });
     connect(deleteButton, &QPushButton::clicked, this, [this]() { emit deleteRequested(m_cuenta.id); });
 
     auto *buttonsLayout = new QHBoxLayout;
     buttonsLayout->addWidget(editButton);
+    buttonsLayout->addWidget(movimientosButton);
     buttonsLayout->addWidget(deleteButton);
     buttonsLayout->addStretch();
 

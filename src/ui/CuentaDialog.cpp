@@ -15,7 +15,7 @@ CuentaDialog::CuentaDialog(Mode mode, QWidget *parent)
     , m_mode(mode)
 {
     setWindowTitle(mode == Mode::Create ? tr("Nueva cuenta") : tr("Editar cuenta"));
-    resize(360, 220);
+    resize(360, 200);
 
     m_nombreEdit = new QLineEdit(this);
     m_monedaCombo = new QComboBox(this);
@@ -25,18 +25,12 @@ CuentaDialog::CuentaDialog(Mode mode, QWidget *parent)
     m_saldoInicialEdit = new QLineEdit(this);
     m_saldoInicialEdit->setPlaceholderText(tr("Ej: 1.000,00"));
 
-    m_saldoActualEdit = new QLineEdit(this);
-    m_saldoActualEdit->setPlaceholderText(tr("Ej: 800,00"));
-
     auto *form = new QFormLayout;
     form->addRow(tr("Nombre"), m_nombreEdit);
     form->addRow(tr("Moneda"), m_monedaCombo);
     form->addRow(tr("Saldo inicial"), m_saldoInicialEdit);
 
-    if (mode == Mode::Create) {
-        m_saldoActualEdit->hide();
-    } else {
-        form->addRow(tr("Saldo actual"), m_saldoActualEdit);
+    if (mode == Mode::Edit) {
         m_monedaCombo->setEnabled(false);
     }
 
@@ -59,9 +53,6 @@ void CuentaDialog::setCuenta(const Cuenta &cuenta)
     }
 
     m_saldoInicialEdit->setText(formatMoney(cuenta.saldoInicial));
-    if (m_mode == Mode::Edit) {
-        m_saldoActualEdit->setText(formatMoney(cuenta.saldoActual));
-    }
 }
 
 QString CuentaDialog::nombre() const
@@ -80,16 +71,6 @@ std::int64_t CuentaDialog::saldoInicialCentavos() const
     return parsed.value_or(0);
 }
 
-std::int64_t CuentaDialog::saldoActualCentavos() const
-{
-    if (m_mode == Mode::Create) {
-        return saldoInicialCentavos();
-    }
-
-    const auto parsed = parseMoney(m_saldoActualEdit->text());
-    return parsed.value_or(0);
-}
-
 void CuentaDialog::accept()
 {
     if (nombre().isEmpty()) {
@@ -99,11 +80,6 @@ void CuentaDialog::accept()
 
     if (!parseMoney(m_saldoInicialEdit->text())) {
         QMessageBox::warning(this, tr("Datos invalidos"), tr("Ingresa un saldo inicial valido."));
-        return;
-    }
-
-    if (m_mode == Mode::Edit && !parseMoney(m_saldoActualEdit->text())) {
-        QMessageBox::warning(this, tr("Datos invalidos"), tr("Ingresa un saldo actual valido."));
         return;
     }
 

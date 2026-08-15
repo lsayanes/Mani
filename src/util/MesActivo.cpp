@@ -47,3 +47,17 @@ int compararMeses(const QString &a, const QString &b)
     }
     return 0;
 }
+
+QDate fechaDefaultParaMes(const QString &mes)
+{
+    if (mes == mesActivoActual()) {
+        return QDate::currentDate();
+    }
+
+    const QDate inicioMes = QDate::fromString(mes + QStringLiteral("-01"), QStringLiteral("yyyy-MM-dd"));
+    if (!inicioMes.isValid()) {
+        return QDate::currentDate();
+    }
+
+    return inicioMes.addDays(inicioMes.daysInMonth() - 1);
+}

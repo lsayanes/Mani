@@ -20,6 +20,8 @@ qt_add_executable(Mani
     src/ui/CuentaCardWidget.cpp
     src/ui/TotalesPanelWidget.cpp
     src/ui/HistorialDialog.cpp
+    src/ui/MovimientoDialog.cpp
+    src/ui/MovimientosCuentaDialog.cpp
 )
 
 target_include_directories(Mani PRIVATE src)

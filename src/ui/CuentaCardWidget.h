@@ -20,6 +20,7 @@ public:
 
 signals:
     void editRequested(std::int64_t cuentaId);
+    void movimientosRequested(std::int64_t cuentaId);
     void deleteRequested(std::int64_t cuentaId);
 
 private:

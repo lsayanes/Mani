@@ -1,5 +1,6 @@
 #include "database/Database.h"
 
+#include <QDate>
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
@@ -155,7 +156,7 @@ bool Database::crearCuenta(const QString &nombre, Moneda moneda, std::int64_t sa
 }
 
 bool Database::actualizarCuenta(std::int64_t id, const QString &nombre, std::int64_t saldoInicialCentavos,
-                                std::int64_t saldoActualCentavos, const QString &mes)
+                                const QString &mes)
 {
     QSqlDatabase db = QSqlDatabase::database(m_connectionName);
     if (!db.transaction()) {
@@ -175,10 +176,9 @@ bool Database::actualizarCuenta(std::int64_t id, const QString &nombre, std::int
 
     QSqlQuery updateSaldo(db);
     updateSaldo.prepare(QStringLiteral(
-        "UPDATE saldo_mes SET saldo_inicial = :saldo_inicial, saldo_actual = :saldo_actual "
+        "UPDATE saldo_mes SET saldo_inicial = :saldo_inicial "
         "WHERE cuenta_id = :cuenta_id AND mes = :mes"));
     updateSaldo.bindValue(QStringLiteral(":saldo_inicial"), saldoInicialCentavos);
-    updateSaldo.bindValue(QStringLiteral(":saldo_actual"), saldoActualCentavos);
     updateSaldo.bindValue(QStringLiteral(":cuenta_id"), id);
     updateSaldo.bindValue(QStringLiteral(":mes"), mes);
     if (!updateSaldo.exec()) {
@@ -208,6 +208,136 @@ bool Database::eliminarCuenta(std::int64_t id)
     }
 
     return true;
+}
+
+bool Database::crearMovimiento(std::int64_t cuentaId, const QDate &fecha, std::int64_t montoCentavos,
+                               const QString &concepto)
+{
+    if (!fecha.isValid() || montoCentavos == 0) {
+        m_lastError = QStringLiteral("Movimiento invalido.");
+        return false;
+    }
+
+    const QString mes = fecha.toString(QStringLiteral("yyyy-MM"));
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+
+    if (!db.transaction()) {
+        m_lastError = db.lastError().text();
+        return false;
+    }
+
+    if (!ensureSaldoMesForCuenta(cuentaId, mes)) {
+        db.rollback();
+        return false;
+    }
+
+    QSqlQuery insertMovimiento(db);
+    insertMovimiento.prepare(QStringLiteral(
+        "INSERT INTO movimiento (cuenta_id, mes, fecha, monto, concepto) "
+        "VALUES (:cuenta_id, :mes, :fecha, :monto, :concepto)"));
+    insertMovimiento.bindValue(QStringLiteral(":cuenta_id"), cuentaId);
+    insertMovimiento.bindValue(QStringLiteral(":mes"), mes);
+    insertMovimiento.bindValue(QStringLiteral(":fecha"), fecha.toString(Qt::ISODate));
+    insertMovimiento.bindValue(QStringLiteral(":monto"), montoCentavos);
+    insertMovimiento.bindValue(QStringLiteral(":concepto"), concepto);
+
+    if (!insertMovimiento.exec()) {
+        m_lastError = insertMovimiento.lastError().text();
+        db.rollback();
+        return false;
+    }
+
+    if (!aplicarMontoSaldo(cuentaId, mes, montoCentavos)) {
+        db.rollback();
+        return false;
+    }
+
+    if (!db.commit()) {
+        m_lastError = db.lastError().text();
+        return false;
+    }
+
+    return true;
+}
+
+bool Database::eliminarMovimiento(std::int64_t movimientoId)
+{
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+
+    QSqlQuery fetch(db);
+    fetch.prepare(QStringLiteral(
+        "SELECT cuenta_id, mes, monto FROM movimiento WHERE id = :id"));
+    fetch.bindValue(QStringLiteral(":id"), movimientoId);
+    if (!fetch.exec() || !fetch.next()) {
+        m_lastError = fetch.lastError().text().isEmpty() ? QStringLiteral("Movimiento no encontrado.")
+                                                         : fetch.lastError().text();
+        return false;
+    }
+
+    const std::int64_t cuentaId = fetch.value(0).toLongLong();
+    const QString mes = fetch.value(1).toString();
+    const std::int64_t monto = fetch.value(2).toLongLong();
+
+    if (!db.transaction()) {
+        m_lastError = db.lastError().text();
+        return false;
+    }
+
+    QSqlQuery remove(db);
+    remove.prepare(QStringLiteral("DELETE FROM movimiento WHERE id = :id"));
+    remove.bindValue(QStringLiteral(":id"), movimientoId);
+    if (!remove.exec()) {
+        m_lastError = remove.lastError().text();
+        db.rollback();
+        return false;
+    }
+
+    if (!aplicarMontoSaldo(cuentaId, mes, -monto)) {
+        db.rollback();
+        return false;
+    }
+
+    if (!db.commit()) {
+        m_lastError = db.lastError().text();
+        return false;
+    }
+
+    return true;
+}
+
+std::vector<Movimiento> Database::movimientosDeCuenta(std::int64_t cuentaId, const QString &mes)
+{
+    std::vector<Movimiento> movimientos;
+
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+    QSqlQuery query(db);
+    query.prepare(QStringLiteral(
+        "SELECT m.id, m.cuenta_id, m.mes, m.fecha, m.monto, m.concepto, c.moneda "
+        "FROM movimiento m "
+        "INNER JOIN cuenta c ON c.id = m.cuenta_id "
+        "WHERE m.cuenta_id = :cuenta_id AND m.mes = :mes "
+        "ORDER BY m.fecha DESC, m.id DESC"));
+    query.bindValue(QStringLiteral(":cuenta_id"), cuentaId);
+    query.bindValue(QStringLiteral(":mes"), mes);
+
+    if (!query.exec()) {
+        m_lastError = query.lastError().text();
+        return movimientos;
+    }
+
+    while (query.next()) {
+        Movimiento movimiento;
+        movimiento.id = query.value(0).toLongLong();
+        movimiento.cuentaId = query.value(1).toLongLong();
+        movimiento.mes = query.value(2).toString();
+        movimiento.fecha = QDate::fromString(query.value(3).toString(), Qt::ISODate);
+        movimiento.monto = query.value(4).toLongLong();
+        movimiento.concepto = query.value(5).toString();
+        movimiento.moneda = monedaFromInt(query.value(6).toInt());
+        movimientos.push_back(movimiento);
+    }
+
+    return movimientos;
 }
 
 std::optional<std::int64_t> Database::tasaCambio(const QString &mes)
@@ -327,6 +457,16 @@ bool Database::initializeSchema()
             "mes TEXT PRIMARY KEY,"
             "usd_a_ars INTEGER NOT NULL"
             ")"),
+        QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS movimiento ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "cuenta_id INTEGER NOT NULL,"
+            "mes TEXT NOT NULL,"
+            "fecha TEXT NOT NULL,"
+            "monto INTEGER NOT NULL,"
+            "concepto TEXT NOT NULL,"
+            "FOREIGN KEY (cuenta_id) REFERENCES cuenta(id) ON DELETE CASCADE"
+            ")"),
     };
 
     for (const QString &statement : statements) {
@@ -381,4 +521,55 @@ std::int64_t Database::saldoActualDelMesAnterior(std::int64_t cuentaId, const QS
     }
 
     return query.value(0).toLongLong();
+}
+
+bool Database::ensureSaldoMesForCuenta(std::int64_t cuentaId, const QString &mes)
+{
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+
+    QSqlQuery existsQuery(db);
+    existsQuery.prepare(QStringLiteral(
+        "SELECT 1 FROM saldo_mes WHERE cuenta_id = :cuenta_id AND mes = :mes"));
+    existsQuery.bindValue(QStringLiteral(":cuenta_id"), cuentaId);
+    existsQuery.bindValue(QStringLiteral(":mes"), mes);
+    if (!existsQuery.exec()) {
+        m_lastError = existsQuery.lastError().text();
+        return false;
+    }
+
+    if (existsQuery.next()) {
+        return true;
+    }
+
+    const std::int64_t saldoAnterior = saldoActualDelMesAnterior(cuentaId, mes);
+    if (saldoAnterior < 0) {
+        m_lastError = QStringLiteral("No hay saldo de referencia para crear el mes de la cuenta.");
+        return false;
+    }
+
+    return insertSaldoMes(cuentaId, mes, saldoAnterior, saldoAnterior);
+}
+
+bool Database::aplicarMontoSaldo(std::int64_t cuentaId, const QString &mes, std::int64_t deltaCentavos)
+{
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+    QSqlQuery query(db);
+    query.prepare(QStringLiteral(
+        "UPDATE saldo_mes SET saldo_actual = saldo_actual + :delta "
+        "WHERE cuenta_id = :cuenta_id AND mes = :mes"));
+    query.bindValue(QStringLiteral(":delta"), deltaCentavos);
+    query.bindValue(QStringLiteral(":cuenta_id"), cuentaId);
+    query.bindValue(QStringLiteral(":mes"), mes);
+
+    if (!query.exec()) {
+        m_lastError = query.lastError().text();
+        return false;
+    }
+
+    if (query.numRowsAffected() != 1) {
+        m_lastError = QStringLiteral("No se pudo actualizar el saldo del mes.");
+        return false;
+    }
+
+    return true;
 }

@@ -28,7 +28,14 @@ Especificación completa del producto: [`mani.md`](mani.md).
 - Diálogo **Historial** con comparativa de gastos por mes (doble clic para abrir un mes).
 - Rollover automático al abrir el mes calendario actual.
 
-Próximas fases (ver `mani.md`): movimientos, categorías y reportes, export/backup.
+**Fase 4** implementada:
+
+- Registro de **movimientos** (ingreso/egreso) por cuenta: fecha, monto y concepto.
+- El saldo actual se actualiza automáticamente al crear o eliminar un movimiento.
+- Ya no se edita el saldo actual a mano; solo el saldo inicial al editar una cuenta.
+- Botón **Movimientos** en cada cuenta y acción **Nuevo movimiento** en la barra.
+
+Próximas fases (ver `mani.md`): categorías y reportes, export/backup.
 
 ## Requisitos
 

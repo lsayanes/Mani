@@ -4,6 +4,8 @@
 #include "ui/CuentaCardWidget.h"
 #include "ui/CuentaDialog.h"
 #include "ui/HistorialDialog.h"
+#include "ui/MovimientoDialog.h"
+#include "ui/MovimientosCuentaDialog.h"
 #include "ui/TotalesPanelWidget.h"
 #include "util/MesActivo.h"
 #include "util/Totales.h"
@@ -18,6 +20,8 @@
 #include <QSignalBlocker>
 #include <QToolBar>
 #include <QVBoxLayout>
+
+#include <QDate>
 
 #include <optional>
 #include <vector>
@@ -37,6 +41,8 @@ MainWindow::MainWindow(Database *database, QWidget *parent)
     auto *toolbar = addToolBar(tr("Acciones"));
     m_nuevaCuentaAction = toolbar->addAction(tr("Nueva cuenta"));
     connect(m_nuevaCuentaAction, &QAction::triggered, this, &MainWindow::onNuevaCuenta);
+    m_nuevoMovimientoAction = toolbar->addAction(tr("Nuevo movimiento"));
+    connect(m_nuevoMovimientoAction, &QAction::triggered, this, &MainWindow::onNuevoMovimiento);
     toolbar->addAction(tr("Historial"), this, &MainWindow::onVerHistorial);
 
     auto *central = new QWidget(this);
@@ -200,7 +206,7 @@ void MainWindow::onEditarCuenta(std::int64_t cuentaId)
     }
 
     if (!m_database->actualizarCuenta(cuentaId, dialog.nombre(), dialog.saldoInicialCentavos(),
-                                      dialog.saldoActualCentavos(), m_mesSeleccionado)) {
+                                      m_mesSeleccionado)) {
         QMessageBox::critical(this, tr("Error"), m_database->lastError());
         return;
     }
@@ -230,6 +236,48 @@ void MainWindow::onBorrarCuenta(std::int64_t cuentaId)
 
     if (!m_database->eliminarCuenta(cuentaId)) {
         QMessageBox::critical(this, tr("Error"), m_database->lastError());
+        return;
+    }
+
+    refresh();
+}
+
+void MainWindow::onMovimientosCuenta(std::int64_t cuentaId)
+{
+    Cuenta *cuenta = findCuenta(cuentaId);
+    if (!cuenta) {
+        return;
+    }
+
+    MovimientosCuentaDialog dialog(m_database, *cuenta, m_mesSeleccionado,
+                                   fechaDefaultParaMes(m_mesSeleccionado), this);
+    connect(&dialog, &MovimientosCuentaDialog::datosModificados, this, &MainWindow::refresh);
+    dialog.exec();
+    refresh();
+}
+
+void MainWindow::onNuevoMovimiento()
+{
+    if (m_cuentas.empty()) {
+        QMessageBox::information(this, tr("Nuevo movimiento"),
+                                 tr("Primero necesitas al menos una cuenta."));
+        return;
+    }
+
+    MovimientoDialog dialog(m_cuentas, fechaDefaultParaMes(m_mesSeleccionado), this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    if (!m_database->crearMovimiento(dialog.cuentaId(), dialog.fecha(), dialog.montoCentavos(),
+                                     dialog.concepto())) {
+        QMessageBox::critical(this, tr("Error"), m_database->lastError());
+        return;
+    }
+
+    const QString mesMovimiento = dialog.fecha().toString(QStringLiteral("yyyy-MM"));
+    if (mesMovimiento != m_mesSeleccionado) {
+        irAMes(mesMovimiento);
         return;
     }
 
@@ -305,6 +353,7 @@ void MainWindow::refresh()
     for (const Cuenta &cuenta : m_cuentas) {
         auto *card = new CuentaCardWidget(cuenta, this);
         connect(card, &CuentaCardWidget::editRequested, this, &MainWindow::onEditarCuenta);
+        connect(card, &CuentaCardWidget::movimientosRequested, this, &MainWindow::onMovimientosCuenta);
         connect(card, &CuentaCardWidget::deleteRequested, this, &MainWindow::onBorrarCuenta);
 
         if (cuenta.moneda == Moneda::USD) {
@@ -321,6 +370,7 @@ void MainWindow::refresh()
     m_totalesPanel->setTotales(totales, tasa);
 
     m_nuevaCuentaAction->setEnabled(esMesCalendarioActual());
+    m_nuevoMovimientoAction->setEnabled(hasCuentasMes);
 }
 
 void MainWindow::refreshMesSelector()

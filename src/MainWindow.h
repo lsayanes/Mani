@@ -24,6 +24,8 @@ private slots:
     void onNuevaCuenta();
     void onEditarCuenta(std::int64_t cuentaId);
     void onBorrarCuenta(std::int64_t cuentaId);
+    void onMovimientosCuenta(std::int64_t cuentaId);
+    void onNuevoMovimiento();
     void onTasaGuardada(std::int64_t usdAArsCentavos);
     void onMesAnterior();
     void onMesSiguiente();
@@ -44,6 +46,7 @@ private:
     std::vector<Cuenta> m_cuentas;
 
     QAction *m_nuevaCuentaAction = nullptr;
+    QAction *m_nuevoMovimientoAction = nullptr;
     QPushButton *m_mesPrevButton = nullptr;
     QPushButton *m_mesNextButton = nullptr;
     QPushButton *m_mesHoyButton = nullptr;

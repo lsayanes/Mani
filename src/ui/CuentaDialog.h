@@ -25,7 +25,6 @@ public:
     QString nombre() const;
     Moneda moneda() const;
     std::int64_t saldoInicialCentavos() const;
-    std::int64_t saldoActualCentavos() const;
 
 private:
     void accept() override;
@@ -34,5 +33,4 @@ private:
     QLineEdit *m_nombreEdit = nullptr;
     QComboBox *m_monedaCombo = nullptr;
     QLineEdit *m_saldoInicialEdit = nullptr;
-    QLineEdit *m_saldoActualEdit = nullptr;
 };
