@@ -1,5 +1,6 @@
 #include "ui/TotalesPanelWidget.h"
 
+#include "util/DolarHoy.h"
 #include "util/Money.h"
 
 #include <QFrame>
@@ -36,10 +37,20 @@ TotalesPanelWidget::TotalesPanelWidget(QWidget *parent)
     connect(guardarTasaButton, &QPushButton::clicked, this, &TotalesPanelWidget::onGuardarTasa);
     connect(m_tasaEdit, &QLineEdit::returnPressed, this, &TotalesPanelWidget::onGuardarTasa);
 
+    m_dolarHoyButton = new QPushButton(tr("DolarHoy"), this);
+    m_dolarHoyButton->setToolTip(
+        tr("Obtener el promedio compra/venta del dolar blue desde dolarhoy.com"));
+    connect(m_dolarHoyButton, &QPushButton::clicked, this, &TotalesPanelWidget::onDolarHoyClicked);
+
+    m_dolarHoy = std::make_unique<DolarHoy>(this);
+    connect(m_dolarHoy.get(), &DolarHoy::fetched, this, &TotalesPanelWidget::onDolarHoyFetched);
+    connect(m_dolarHoy.get(), &DolarHoy::failed, this, &TotalesPanelWidget::onDolarHoyFailed);
+
     auto *tasaRow = new QHBoxLayout;
     tasaRow->addWidget(new QLabel(tr("1 USD = $"), this));
     tasaRow->addWidget(m_tasaEdit);
     tasaRow->addWidget(guardarTasaButton);
+    tasaRow->addWidget(m_dolarHoyButton);
     tasaRow->addStretch();
 
     layout->addWidget(tasaTitle);
@@ -147,4 +158,28 @@ void TotalesPanelWidget::onGuardarTasa()
     }
 
     emit tasaGuardada(*parsed);
+}
+
+void TotalesPanelWidget::onDolarHoyClicked()
+{
+    m_dolarHoyButton->setEnabled(false);
+    m_dolarHoyButton->setText(tr("Consultando..."));
+    m_dolarHoy->fetchDolarBlue();
+}
+
+void TotalesPanelWidget::onDolarHoyFetched(std::int64_t promedioCentavos)
+{
+    m_tasaEdit->setText(formatMoney(promedioCentavos));
+    emit tasaGuardada(promedioCentavos);
+
+    m_dolarHoyButton->setEnabled(true);
+    m_dolarHoyButton->setText(tr("DolarHoy"));
+}
+
+void TotalesPanelWidget::onDolarHoyFailed(const QString &message)
+{
+    QMessageBox::warning(this, tr("DolarHoy"), message);
+
+    m_dolarHoyButton->setEnabled(true);
+    m_dolarHoyButton->setText(tr("DolarHoy"));
 }

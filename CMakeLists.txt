@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Network)
 
 set(MANI_PLATFORM_SOURCES src/platform/TouchIdAuth_stub.cpp)
 if(APPLE)
@@ -18,6 +18,7 @@ qt_add_executable(Mani
     src/MainWindow.cpp
     src/database/Database.cpp
     src/util/Money.cpp
+    src/util/DolarHoy.cpp
     src/util/AppPaths.cpp
     src/util/AppLock.cpp
     src/util/CsvIO.cpp
@@ -38,7 +39,7 @@ qt_add_executable(Mani
 
 target_include_directories(Mani PRIVATE src)
 
-target_link_libraries(Mani PRIVATE Qt6::Widgets Qt6::Sql)
+target_link_libraries(Mani PRIVATE Qt6::Widgets Qt6::Sql Qt6::Network)
 
 target_compile_definitions(Mani PRIVATE MANI_APP_VERSION="${PROJECT_VERSION}")
 

@@ -57,6 +57,9 @@ fi
 echo "Empaquetando dependencias Qt (macdeployqt)..."
 "$MACDEPLOYQT" "$APP_NAME" -always-overwrite -codesign=-
 
+echo "Re-firmando bundle (ad-hoc)..."
+codesign --force --deep --sign - "$APP_NAME"
+
 cd "$SCRIPT_DIR"
 
 ARCHIVE_DIR="dist"
