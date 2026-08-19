@@ -275,6 +275,77 @@ bool Database::crearMovimiento(std::int64_t cuentaId, const QDate &fecha, std::i
     return true;
 }
 
+bool Database::actualizarMovimiento(std::int64_t movimientoId, const QDate &fecha,
+                                    std::int64_t montoCentavos, const QString &concepto,
+                                    const QString &categoria)
+{
+    if (!fecha.isValid() || montoCentavos == 0) {
+        m_lastError = QStringLiteral("Movimiento invalido.");
+        return false;
+    }
+
+    const QString mesNuevo = fecha.toString(QStringLiteral("yyyy-MM"));
+    const QString categoriaNormalizada = categoria.trimmed();
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+
+    QSqlQuery fetch(db);
+    fetch.prepare(QStringLiteral("SELECT cuenta_id, mes, monto FROM movimiento WHERE id = :id"));
+    fetch.bindValue(QStringLiteral(":id"), movimientoId);
+    if (!fetch.exec() || !fetch.next()) {
+        m_lastError = fetch.lastError().text().isEmpty() ? QStringLiteral("Movimiento no encontrado.")
+                                                         : fetch.lastError().text();
+        return false;
+    }
+
+    const std::int64_t cuentaId = fetch.value(0).toLongLong();
+    const QString mesViejo = fetch.value(1).toString();
+    const std::int64_t montoViejo = fetch.value(2).toLongLong();
+
+    if (!db.transaction()) {
+        m_lastError = db.lastError().text();
+        return false;
+    }
+
+    QSqlQuery update(db);
+    update.prepare(QStringLiteral(
+        "UPDATE movimiento SET mes = :mes, fecha = :fecha, monto = :monto, "
+        "concepto = :concepto, categoria = :categoria WHERE id = :id"));
+    update.bindValue(QStringLiteral(":mes"), mesNuevo);
+    update.bindValue(QStringLiteral(":fecha"), fecha.toString(Qt::ISODate));
+    update.bindValue(QStringLiteral(":monto"), montoCentavos);
+    update.bindValue(QStringLiteral(":concepto"), concepto);
+    update.bindValue(QStringLiteral(":categoria"),
+                     categoriaNormalizada.isEmpty() ? QVariant() : categoriaNormalizada);
+    update.bindValue(QStringLiteral(":id"), movimientoId);
+    if (!update.exec()) {
+        m_lastError = update.lastError().text();
+        db.rollback();
+        return false;
+    }
+
+    if (!aplicarMontoSaldo(cuentaId, mesViejo, -montoViejo)) {
+        db.rollback();
+        return false;
+    }
+
+    if (mesNuevo != mesViejo && !ensureSaldoMesForCuenta(cuentaId, mesNuevo)) {
+        db.rollback();
+        return false;
+    }
+
+    if (!aplicarMontoSaldo(cuentaId, mesNuevo, montoCentavos)) {
+        db.rollback();
+        return false;
+    }
+
+    if (!db.commit()) {
+        m_lastError = db.lastError().text();
+        return false;
+    }
+
+    return true;
+}
+
 bool Database::eliminarMovimiento(std::int64_t movimientoId)
 {
     QSqlDatabase db = QSqlDatabase::database(m_connectionName);

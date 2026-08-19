@@ -32,7 +32,8 @@ Especificación completa del producto: [`mani.md`](mani.md).
 **Fase 4** implementada:
 
 - Registro de **movimientos** (ingreso/egreso) por cuenta: fecha, monto y concepto.
-- El saldo actual se actualiza automáticamente al crear o eliminar un movimiento.
+- **Edición de movimientos**: botón **Editar** o doble clic en la fila (fecha, monto, concepto, categoría, tipo); admite mover el movimiento a otro mes y recalculalos saldos.
+- El saldo actual se actualiza automáticamente al crear, editar o eliminar un movimiento.
 - Ya no se edita el saldo actual a mano; solo el saldo inicial al editar una cuenta.
 - Botón **Movimientos** en cada cuenta y acción **Nuevo movimiento** en la barra.
 

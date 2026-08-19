@@ -3,6 +3,8 @@
 #include "database/Database.h"
 #include "model/Cuenta.h"
 
+#include <vector>
+
 #include <QDialog>
 
 class QTableWidget;
@@ -20,6 +22,7 @@ signals:
 
 private slots:
     void onAgregar();
+    void onEditar();
     void onEliminar();
 
 private:
@@ -30,4 +33,5 @@ private:
     QString m_mes;
     QDate m_fechaDefault;
     QTableWidget *m_table = nullptr;
+    std::vector<Movimiento> m_movimientos;
 };

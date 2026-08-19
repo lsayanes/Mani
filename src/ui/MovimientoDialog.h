@@ -1,6 +1,7 @@
 #pragma once
 
 #include "model/Cuenta.h"
+#include "model/Movimiento.h"
 
 #include <optional>
 #include <vector>
@@ -28,6 +29,7 @@ public:
                               const QStringList &categorias, QWidget *parent = nullptr);
 
     void setCuentaId(std::int64_t cuentaId);
+    void setDatosEdicion(const Movimiento &movimiento);
 
     std::int64_t cuentaId() const;
     QDate fecha() const;

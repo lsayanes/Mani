@@ -32,6 +32,9 @@ public:
 
     bool crearMovimiento(std::int64_t cuentaId, const QDate &fecha, std::int64_t montoCentavos,
                          const QString &concepto, const QString &categoria = {});
+    bool actualizarMovimiento(std::int64_t movimientoId, const QDate &fecha,
+                              std::int64_t montoCentavos, const QString &concepto,
+                              const QString &categoria = {});
     bool eliminarMovimiento(std::int64_t movimientoId);
     std::vector<Movimiento> movimientosDeCuenta(std::int64_t cuentaId, const QString &mes);
 

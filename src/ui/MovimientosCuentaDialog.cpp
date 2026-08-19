@@ -39,9 +39,12 @@ MovimientosCuentaDialog::MovimientosCuentaDialog(Database *database, const Cuent
     m_table->verticalHeader()->setVisible(false);
 
     auto *agregarButton = new QPushButton(tr("Agregar movimiento"), this);
+    auto *editarButton = new QPushButton(tr("Editar"), this);
     auto *eliminarButton = new QPushButton(tr("Eliminar"), this);
     connect(agregarButton, &QPushButton::clicked, this, &MovimientosCuentaDialog::onAgregar);
+    connect(editarButton, &QPushButton::clicked, this, &MovimientosCuentaDialog::onEditar);
     connect(eliminarButton, &QPushButton::clicked, this, &MovimientosCuentaDialog::onEliminar);
+    connect(m_table, &QTableWidget::cellDoubleClicked, this, &MovimientosCuentaDialog::onEditar);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
     connect(buttons, &QDialogButtonBox::rejected, this, &MovimientosCuentaDialog::reject);
@@ -50,6 +53,7 @@ MovimientosCuentaDialog::MovimientosCuentaDialog(Database *database, const Cuent
     layout->addWidget(intro);
     layout->addWidget(m_table, 1);
     layout->addWidget(agregarButton);
+    layout->addWidget(editarButton);
     layout->addWidget(eliminarButton);
     layout->addWidget(buttons);
 
@@ -58,11 +62,11 @@ MovimientosCuentaDialog::MovimientosCuentaDialog(Database *database, const Cuent
 
 void MovimientosCuentaDialog::populateTable()
 {
-    const std::vector<Movimiento> movimientos = m_database->movimientosDeCuenta(m_cuenta.id, m_mes);
-    m_table->setRowCount(static_cast<int>(movimientos.size()));
+    m_movimientos = m_database->movimientosDeCuenta(m_cuenta.id, m_mes);
+    m_table->setRowCount(static_cast<int>(m_movimientos.size()));
 
-    for (int row = 0; row < static_cast<int>(movimientos.size()); ++row) {
-        const Movimiento &movimiento = movimientos[static_cast<std::size_t>(row)];
+    for (int row = 0; row < static_cast<int>(m_movimientos.size()); ++row) {
+        const Movimiento &movimiento = m_movimientos[static_cast<std::size_t>(row)];
 
         auto *fechaItem = new QTableWidgetItem(movimiento.fecha.toString(QStringLiteral("dd/MM/yyyy")));
         fechaItem->setData(Qt::UserRole, movimiento.id);
@@ -89,6 +93,34 @@ void MovimientosCuentaDialog::onAgregar()
 
     if (!m_database->crearMovimiento(dialog.cuentaId(), dialog.fecha(), dialog.montoCentavos(),
                                      dialog.concepto(), dialog.categoria())) {
+        QMessageBox::critical(this, tr("Error"), m_database->lastError());
+        return;
+    }
+
+    populateTable();
+    emit datosModificados();
+}
+
+void MovimientosCuentaDialog::onEditar()
+{
+    const int row = m_table->currentRow();
+    if (row < 0 || row >= static_cast<int>(m_movimientos.size())) {
+        QMessageBox::information(this, tr("Editar movimiento"), tr("Selecciona un movimiento."));
+        return;
+    }
+
+    const Movimiento &movimiento = m_movimientos[static_cast<std::size_t>(row)];
+
+    const std::vector<Cuenta> cuentas = {m_cuenta};
+    MovimientoDialog dialog(cuentas, m_fechaDefault, m_database->categoriasConocidas(), this);
+    dialog.setDatosEdicion(movimiento);
+
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    if (!m_database->actualizarMovimiento(movimiento.id, dialog.fecha(), dialog.montoCentavos(),
+                                          dialog.concepto(), dialog.categoria())) {
         QMessageBox::critical(this, tr("Error"), m_database->lastError());
         return;
     }

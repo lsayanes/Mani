@@ -72,6 +72,31 @@ void MovimientoDialog::setCuentaId(std::int64_t cuentaId)
     }
 }
 
+void MovimientoDialog::setDatosEdicion(const Movimiento &movimiento)
+{
+    setWindowTitle(tr("Editar movimiento"));
+
+    setCuentaId(movimiento.cuentaId);
+
+    const bool ingreso = movimiento.monto >= 0;
+    const int tipoIndex =
+        m_tipoCombo->findData(static_cast<int>(ingreso ? Tipo::Ingreso : Tipo::Egreso));
+    if (tipoIndex >= 0) {
+        m_tipoCombo->setCurrentIndex(tipoIndex);
+    }
+
+    m_fechaEdit->setDate(movimiento.fecha);
+    m_montoEdit->setText(formatMoney(movimiento.monto < 0 ? -movimiento.monto : movimiento.monto));
+    m_conceptoEdit->setText(movimiento.concepto);
+
+    const int categoriaIndex = m_categoriaCombo->findData(movimiento.categoria);
+    if (categoriaIndex >= 0) {
+        m_categoriaCombo->setCurrentIndex(categoriaIndex);
+    } else {
+        m_categoriaCombo->setCurrentText(movimiento.categoria);
+    }
+}
+
 std::int64_t MovimientoDialog::cuentaId() const
 {
     return m_cuentaCombo->currentData().toLongLong();
