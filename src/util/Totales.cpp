@@ -9,10 +9,10 @@ TotalesMes calcularTotales(const std::vector<Cuenta> &cuentas)
     for (const Cuenta &cuenta : cuentas) {
         if (cuenta.moneda == Moneda::USD) {
             totales.actualUsd += cuenta.saldoActual;
-            totales.gastadoUsd += cuenta.gastado();
+            totales.gastadoUsd += cuenta.gastado;
         } else {
             totales.actualArs += cuenta.saldoActual;
-            totales.gastadoArs += cuenta.gastado();
+            totales.gastadoArs += cuenta.gastado;
         }
     }
 

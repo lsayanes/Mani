@@ -25,7 +25,7 @@ Una cuenta pertenece a una sola moneda. El saldo negativo esta permitido (p. ej.
 | **Mes activo** | `YYYY-MM` del reloj del dispositivo. En Fase 1 no hay selector de mes. |
 | **Saldo inicial** | Saldo de referencia del mes (lo que habia al empezar). |
 | **Saldo actual** | Saldo del mes en curso. |
-| **Gastado** | `saldo_inicial - saldo_actual` (puede ser negativo si el saldo subio). |
+| **Gastado** | Suma de egresos del mes (lo que salio de la cuenta). Los ingresos no lo modifican. |
 | **Tipo de cambio** | Una sola tasa editable por mes: cuantos ARS vale 1 USD (oficial, MEP o blue: la que el usuario quiera usar). |
 
 **Rollover (regla de negocio, desde Fase 1):** al abrir un mes nuevo, para cada cuenta `saldo_inicial` del mes = `saldo_actual` del mes anterior, y `saldo_actual` arranca igual. Si no hay mes previo, el alta usa el saldo inicial que cargo el usuario.
@@ -106,7 +106,7 @@ Orden: orden de creacion.
 Acciones:
 
 - **Editar saldo actual** (inline o dialogo). Provisorio: en Fase 4 lo reemplazan los movimientos.
-- **Editar** nombre y/o saldo inicial (dialogo). Editar el inicial a mitad de mes esta permitido y recalcula el gastado.
+- **Editar** nombre y/o saldo inicial (dialogo). Editar el inicial a mitad de mes esta permitido; el gastado sigue siendo la suma de egresos.
 - **Borrar** cuenta, con confirmacion. Borra tambien sus `saldo_mes`.
 - La moneda no se edita.
 
@@ -124,7 +124,7 @@ Principal  →  Alta de cuenta
 
 ### Gasto por cuenta
 
-`gastado = saldo_inicial - saldo_actual` (centavos de la moneda de la cuenta). Visible junto al saldo actual.
+`gastado` = suma de egresos del mes (`monto < 0`). Visible junto al saldo actual. Los ingresos suben el saldo actual y no restan gastado.
 
 ### Tipo de cambio USD → ARS
 
@@ -135,8 +135,8 @@ Campo editable por mes en la pantalla principal, formato visible: `1 USD = $ 1.5
 
 ### Totales al pie, separados por moneda
 
-- **Total gastado USD** = Σ (inicial − actual) de cuentas USD
-- **Total gastado ARS** = Σ de cuentas ARS
+- **Total gastado USD** = Σ egresos de cuentas USD
+- **Total gastado ARS** = Σ egresos de cuentas ARS
 - **Total consolidado en $** = `total_ars + (total_usd * usd_a_ars ± 50) / 100`
 
 Ejemplo: gastado USD $100,00 (10000 centavos) + gastado ARS $5.000,00 con tasa 150000:

@@ -79,5 +79,5 @@ void CuentaCardWidget::refresh()
     m_nombreLabel->setText(m_cuenta.nombre);
     styleMoneyValue(m_inicialValue, m_cuenta.saldoInicial);
     styleMoneyValue(m_actualValue, m_cuenta.saldoActual);
-    styleMoneyValue(m_gastadoValue, m_cuenta.gastado());
+    styleMoneyValue(m_gastadoValue, m_cuenta.gastado);
 }

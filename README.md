@@ -73,6 +73,7 @@ Desde la raíz del proyecto:
 | `./build.sh` | Compila en `build/` (modo Debug) |
 | `./run.sh` | Ejecuta la app compilada |
 | `./brun.sh` | Compila y ejecuta |
+| `./package.sh` | Empaqueta Release e instala en `/Applications` |
 | `./clean.sh` | Limpia artefactos de build |
 
 Compilación manual:
@@ -83,6 +84,26 @@ cmake .. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH=$(brew --prefix qt)
 make -j$(sysctl -n hw.ncpu)
 open Mani.app
 ```
+
+## Instalar en Aplicaciones (macOS)
+
+Para generar un `.app` autocontenido (con Qt y el driver SQLite incluidos) e instalarlo en el Launchpad:
+
+```bash
+./package.sh
+```
+
+Eso compila en **Release**, empaqueta con `macdeployqt`, deja una copia en `dist/Mani-1.2.0.app` e instala en `/Applications/Mani.app`.
+
+Solo empaquetar sin instalar:
+
+```bash
+./package.sh --local
+```
+
+Luego podés arrastrar `dist/Mani-1.2.0.app` a Aplicaciones a mano.
+
+**Nota:** la firma es ad-hoc (uso en tu Mac). La primera vez macOS puede pedirte confirmar en *Ajustes del sistema → Privacidad y seguridad*.
 
 ## Datos de la aplicación
 
@@ -121,7 +142,7 @@ Mani/
 
 - **Monedas:** USD (1) y ARS (2). Una cuenta no cambia de moneda después de creada.
 - **Montos:** almacenados en centavos; visibles como `$ 1.234,56` (locale `es_AR`).
-- **Gastado:** `saldo_inicial - saldo_actual` (puede ser negativo si el saldo subió).
+- **Gastado:** suma de egresos del mes (los ingresos no lo modifican).
 - **Colores en UI:** valores positivos en verde, negativos en rojo.
 
 ## Capturas

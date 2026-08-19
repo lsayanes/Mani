@@ -23,6 +23,7 @@
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QApplication>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSignalBlocker>
@@ -42,7 +43,7 @@ MainWindow::MainWindow(Database *database, QWidget *parent)
     , m_database(database)
     , m_mesSeleccionado(mesActivoActual())
 {
-    setWindowTitle(tr("Mani"));
+    setWindowTitle(tr("Mani %1").arg(QApplication::applicationVersion()));
     resize(900, 640);
 
     m_database->ensureMesActivo(mesActivoActual());

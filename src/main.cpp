@@ -19,6 +19,7 @@ int main(int argc, char *argv[])
 
     QLocale::setDefault(QLocale(QStringLiteral("es_AR")));
     app.setApplicationName(QStringLiteral("Mani"));
+    app.setApplicationVersion(QStringLiteral(MANI_APP_VERSION));
     app.setOrganizationName(QStringLiteral("Mani"));
 
     QCoreApplication::addLibraryPath(QLibraryInfo::path(QLibraryInfo::PluginsPath));

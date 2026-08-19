@@ -99,9 +99,15 @@ std::vector<Cuenta> Database::cuentasDelMes(const QString &mes)
     QSqlDatabase db = QSqlDatabase::database(m_connectionName);
     QSqlQuery query(db);
     query.prepare(QStringLiteral(
-        "SELECT c.id, c.nombre, c.moneda, s.saldo_inicial, s.saldo_actual "
+        "SELECT c.id, c.nombre, c.moneda, s.saldo_inicial, s.saldo_actual, "
+        "COALESCE(g.gastado, 0) "
         "FROM cuenta c "
         "INNER JOIN saldo_mes s ON s.cuenta_id = c.id "
+        "LEFT JOIN ("
+        "SELECT cuenta_id, mes, SUM(ABS(monto)) AS gastado "
+        "FROM movimiento WHERE monto < 0 "
+        "GROUP BY cuenta_id, mes"
+        ") g ON g.cuenta_id = c.id AND g.mes = s.mes "
         "WHERE s.mes = :mes "
         "ORDER BY c.id"));
     query.bindValue(QStringLiteral(":mes"), mes);
@@ -118,6 +124,7 @@ std::vector<Cuenta> Database::cuentasDelMes(const QString &mes)
         cuenta.moneda = monedaFromInt(query.value(2).toInt());
         cuenta.saldoInicial = query.value(3).toLongLong();
         cuenta.saldoActual = query.value(4).toLongLong();
+        cuenta.gastado = query.value(5).toLongLong();
         cuentas.push_back(cuenta);
     }
 
@@ -468,10 +475,15 @@ std::vector<ResumenMes> Database::resumenHistorico()
     QSqlQuery query(db);
     if (!query.exec(QStringLiteral(
             "SELECT s.mes, "
-            "SUM(CASE WHEN c.moneda = 1 THEN s.saldo_inicial - s.saldo_actual ELSE 0 END), "
-            "SUM(CASE WHEN c.moneda = 2 THEN s.saldo_inicial - s.saldo_actual ELSE 0 END) "
+            "SUM(CASE WHEN c.moneda = 1 THEN COALESCE(g.gastado, 0) ELSE 0 END), "
+            "SUM(CASE WHEN c.moneda = 2 THEN COALESCE(g.gastado, 0) ELSE 0 END) "
             "FROM saldo_mes s "
             "INNER JOIN cuenta c ON c.id = s.cuenta_id "
+            "LEFT JOIN ("
+            "SELECT cuenta_id, mes, SUM(ABS(monto)) AS gastado "
+            "FROM movimiento WHERE monto < 0 "
+            "GROUP BY cuenta_id, mes"
+            ") g ON g.cuenta_id = s.cuenta_id AND g.mes = s.mes "
             "GROUP BY s.mes "
             "ORDER BY s.mes DESC"))) {
         m_lastError = query.lastError().text();
