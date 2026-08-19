@@ -18,6 +18,7 @@ Especificación completa del producto: [`mani.md`](mani.md).
 **Fase 2** implementada:
 
 - Tipo de cambio USD → ARS editable por mes (`1 USD = $ …`).
+- Botón **DolarHoy**: carga la cotización del dólar blue (promedio compra/venta) desde `dolarhoy.com` con un clic y la guarda automáticamente para el mes activo.
 - Totales al pie: saldo **actual** y **gastado** en USD/ARS, más consolidado en pesos.
 - El consolidado se muestra solo cuando hay tasa cargada para el mes activo.
 
@@ -56,7 +57,7 @@ Próximas fases (ver `mani.md`): refinamientos y plataformas móviles.
 
 - **macOS** 13+ (desarrollo actual)
 - **CMake** 3.16+
-- **Qt 6** con módulos Widgets y Sql
+- **Qt 6** con módulos Widgets, Sql y Network
 
 En macOS con Homebrew:
 
@@ -135,7 +136,7 @@ Mani/
     ├── model/           # Moneda, Cuenta
     ├── ui/              # Diálogos, tarjetas, reportes, bloqueo
     ├── platform/        # Touch ID (macOS)
-    └── util/            # Montos, mes activo, rutas, CSV, bloqueo
+    └── util/            # Montos, mes activo, rutas, CSV, bloqueo, DolarHoy
 ```
 
 ## Convenciones
