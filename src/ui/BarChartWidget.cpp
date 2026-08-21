@@ -76,7 +76,7 @@ void BarChartWidget::paintEvent(QPaintEvent *event)
 
         painter.setPen(palette().windowText().color());
         const QString label = painter.fontMetrics().elidedText(dato.categoria, Qt::ElideRight, kLabelWidth - 4);
-        painter.drawText(area.x(), y + kBarHeight - 6, kLabelWidth, kBarHeight, Qt::AlignVCenter | Qt::AlignLeft,
+        painter.drawText(area.x(), y, kLabelWidth, kBarHeight, Qt::AlignVCenter | Qt::AlignLeft,
                          label);
 
         const QRect barRect(area.x() + kLabelWidth, y, qMax(barWidth, 2), kBarHeight);
