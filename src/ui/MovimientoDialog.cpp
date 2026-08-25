@@ -28,6 +28,7 @@ MovimientoDialog::MovimientoDialog(const std::vector<Cuenta> &cuentas, const QDa
     m_tipoCombo = new QComboBox(this);
     m_tipoCombo->addItem(tr("Ingreso"), static_cast<int>(Tipo::Ingreso));
     m_tipoCombo->addItem(tr("Egreso"), static_cast<int>(Tipo::Egreso));
+    m_tipoCombo->setCurrentIndex(1);
 
     m_categoriaCombo = new QComboBox(this);
     m_categoriaCombo->setEditable(true);
