@@ -11,6 +11,7 @@
 #include <QDialogButtonBox>
 #include <QHeaderView>
 #include <QLabel>
+#include <QScrollArea>
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTableWidgetItem>
@@ -45,16 +46,24 @@ ReportesDialog::ReportesDialog(Database *database, const QString &mes, QWidget *
 void ReportesDialog::buildCategoriaTab(QTabWidget *tabs)
 {
     auto *tab = new QWidget(this);
-    auto *layout = new QVBoxLayout(tab);
+    auto *tabLayout = new QVBoxLayout(tab);
+    tabLayout->setContentsMargins(0, 0, 0, 0);
+
+    auto *scrollArea = new QScrollArea(tab);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+    auto *content = new QWidget();
+    auto *layout = new QVBoxLayout(content);
 
     const std::vector<GastoCategoria> gastosUsd = m_database->gastoPorCategoria(m_mes, Moneda::USD);
     const std::vector<GastoCategoria> gastosArs = m_database->gastoPorCategoria(m_mes, Moneda::ARS);
 
-    auto *usdChart = new BarChartWidget(tab);
+    auto *usdChart = new BarChartWidget(content);
     usdChart->setTitulo(QStringLiteral("USD"));
     usdChart->setDatos(gastosUsd);
 
-    auto *usdTable = new QTableWidget(tab);
+    auto *usdTable = new QTableWidget(content);
     usdTable->setColumnCount(2);
     usdTable->setHorizontalHeaderLabels({tr("Categoría"), tr("Gasto")});
     usdTable->horizontalHeader()->setStretchLastSection(true);
@@ -62,11 +71,11 @@ void ReportesDialog::buildCategoriaTab(QTabWidget *tabs)
     usdTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     populateCategoriaTable(usdTable, gastosUsd);
 
-    auto *arsChart = new BarChartWidget(tab);
+    auto *arsChart = new BarChartWidget(content);
     arsChart->setTitulo(QStringLiteral("ARS"));
     arsChart->setDatos(gastosArs);
 
-    auto *arsTable = new QTableWidget(tab);
+    auto *arsTable = new QTableWidget(content);
     arsTable->setColumnCount(2);
     arsTable->setHorizontalHeaderLabels({tr("Categoría"), tr("Gasto")});
     arsTable->horizontalHeader()->setStretchLastSection(true);
@@ -74,11 +83,14 @@ void ReportesDialog::buildCategoriaTab(QTabWidget *tabs)
     arsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     populateCategoriaTable(arsTable, gastosArs);
 
-    layout->addWidget(new QLabel(tr("Gasto por categoría (egresos del mes)"), tab));
+    layout->addWidget(new QLabel(tr("Gasto por categoría (egresos del mes)"), content));
     layout->addWidget(usdChart);
     layout->addWidget(usdTable);
     layout->addWidget(arsChart);
     layout->addWidget(arsTable);
+
+    scrollArea->setWidget(content);
+    tabLayout->addWidget(scrollArea);
 
     tabs->addTab(tab, tr("Por categoría"));
 }
@@ -86,7 +98,15 @@ void ReportesDialog::buildCategoriaTab(QTabWidget *tabs)
 void ReportesDialog::buildMesTab(QTabWidget *tabs)
 {
     auto *tab = new QWidget(this);
-    auto *layout = new QVBoxLayout(tab);
+    auto *tabLayout = new QVBoxLayout(tab);
+    tabLayout->setContentsMargins(0, 0, 0, 0);
+
+    auto *scrollArea = new QScrollArea(tab);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+    auto *content = new QWidget();
+    auto *layout = new QVBoxLayout(content);
 
     const std::vector<ResumenMes> resumenes = m_database->resumenHistorico();
 
@@ -104,11 +124,11 @@ void ReportesDialog::buildMesTab(QTabWidget *tabs)
         gastosMensuales.push_back(item);
     }
 
-    auto *chart = new BarChartWidget(tab);
+    auto *chart = new BarChartWidget(content);
     chart->setTitulo(tr("Gasto consolidado por mes"));
     chart->setDatos(gastosMensuales);
 
-    auto *table = new QTableWidget(tab);
+    auto *table = new QTableWidget(content);
     table->setColumnCount(4);
     table->setHorizontalHeaderLabels(
         {tr("Mes"), tr("Gastado USD"), tr("Gastado ARS"), tr("Gastado consolidado")});
@@ -133,9 +153,12 @@ void ReportesDialog::buildMesTab(QTabWidget *tabs)
 
     table->resizeColumnsToContents();
 
-    layout->addWidget(new QLabel(tr("Comparativa mensual de gastos"), tab));
+    layout->addWidget(new QLabel(tr("Comparativa mensual de gastos"), content));
     layout->addWidget(chart, 1);
     layout->addWidget(table);
+
+    scrollArea->setWidget(content);
+    tabLayout->addWidget(scrollArea);
 
     tabs->addTab(tab, tr("Por mes"));
 }
