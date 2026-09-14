@@ -23,6 +23,7 @@ signals:
 private slots:
     void onAgregar();
     void onEditar();
+    void onMarcarTransferencia();
     void onEliminar();
 
 private:

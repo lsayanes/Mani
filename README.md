@@ -32,7 +32,8 @@ Especificación completa del producto: [`mani.md`](mani.md).
 **Fase 4** implementada:
 
 - Registro de **movimientos** (ingreso/egreso) por cuenta: fecha, monto y concepto.
-- **Edición de movimientos**: botón **Editar** o doble clic en la fila (fecha, monto, concepto, categoría, tipo); admite mover el movimiento a otro mes y recalculalos saldos.
+- Tipo **Transferencia**: sale de una cuenta y entra en otra (mismo o distinto monto si cambia la moneda). No suma a Gastado ni al consolidado.
+- **Edición de movimientos**: botón **Editar** o doble clic en la fila (fecha, monto, concepto, categoría, tipo); admite mover el movimiento a otro mes y recalcula los saldos.
 - El saldo actual se actualiza automáticamente al crear, editar o eliminar un movimiento.
 - Ya no se edita el saldo actual a mano; solo el saldo inicial al editar una cuenta.
 - Botón **Movimientos** en cada cuenta y acción **Nuevo movimiento** en la barra.
@@ -144,7 +145,7 @@ Mani/
 
 - **Monedas:** USD (1) y ARS (2). Una cuenta no cambia de moneda después de creada.
 - **Montos:** almacenados en centavos; visibles como `$ 1.234,56` (locale `es_AR`).
-- **Gastado:** suma de egresos del mes (los ingresos no lo modifican).
+- **Gastado:** suma de egresos del mes que no son transferencias (los ingresos y pases entre cuentas no lo modifican).
 - **Colores en UI:** valores positivos en verde, negativos en rojo.
 
 ## Capturas

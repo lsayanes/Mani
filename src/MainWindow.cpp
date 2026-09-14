@@ -327,8 +327,15 @@ void MainWindow::onNuevoMovimiento()
         return;
     }
 
-    if (!m_database->crearMovimiento(dialog.cuentaId(), dialog.fecha(), dialog.montoCentavos(),
-                                     dialog.concepto(), dialog.categoria())) {
+    if (dialog.tipo() == MovimientoDialog::Tipo::Transferencia) {
+        if (!m_database->crearTransferencia(dialog.cuentaId(), dialog.cuentaDestinoId(), dialog.fecha(),
+                                            dialog.montoOrigenCentavos(), dialog.montoDestinoCentavos(),
+                                            dialog.concepto(), dialog.categoria())) {
+            QMessageBox::critical(this, tr("Error"), m_database->lastError());
+            return;
+        }
+    } else if (!m_database->crearMovimiento(dialog.cuentaId(), dialog.fecha(), dialog.montoCentavos(),
+                                            dialog.concepto(), dialog.categoria())) {
         QMessageBox::critical(this, tr("Error"), m_database->lastError());
         return;
     }

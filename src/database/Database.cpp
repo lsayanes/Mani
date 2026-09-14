@@ -105,7 +105,7 @@ std::vector<Cuenta> Database::cuentasDelMes(const QString &mes)
         "INNER JOIN saldo_mes s ON s.cuenta_id = c.id "
         "LEFT JOIN ("
         "SELECT cuenta_id, mes, SUM(ABS(monto)) AS gastado "
-        "FROM movimiento WHERE monto < 0 "
+        "FROM movimiento WHERE monto < 0 AND IFNULL(es_transferencia, 0) = 0 "
         "GROUP BY cuenta_id, mes"
         ") g ON g.cuenta_id = c.id AND g.mes = s.mes "
         "WHERE s.mes = :mes "
@@ -246,8 +246,9 @@ bool Database::crearMovimiento(std::int64_t cuentaId, const QDate &fecha, std::i
 
     QSqlQuery insertMovimiento(db);
     insertMovimiento.prepare(QStringLiteral(
-        "INSERT INTO movimiento (cuenta_id, mes, fecha, monto, concepto, categoria) "
-        "VALUES (:cuenta_id, :mes, :fecha, :monto, :concepto, :categoria)"));
+        "INSERT INTO movimiento (cuenta_id, mes, fecha, monto, concepto, categoria, "
+        "es_transferencia) "
+        "VALUES (:cuenta_id, :mes, :fecha, :monto, :concepto, :categoria, 0)"));
     insertMovimiento.bindValue(QStringLiteral(":cuenta_id"), cuentaId);
     insertMovimiento.bindValue(QStringLiteral(":mes"), mes);
     insertMovimiento.bindValue(QStringLiteral(":fecha"), fecha.toString(Qt::ISODate));
@@ -263,6 +264,67 @@ bool Database::crearMovimiento(std::int64_t cuentaId, const QDate &fecha, std::i
     }
 
     if (!aplicarMontoSaldo(cuentaId, mes, montoCentavos)) {
+        db.rollback();
+        return false;
+    }
+
+    if (!db.commit()) {
+        m_lastError = db.lastError().text();
+        return false;
+    }
+
+    return true;
+}
+
+bool Database::crearTransferencia(std::int64_t cuentaOrigenId, std::int64_t cuentaDestinoId,
+                                 const QDate &fecha, std::int64_t montoOrigenCentavos,
+                                 std::int64_t montoDestinoCentavos, const QString &concepto,
+                                 const QString &categoria)
+{
+    if (!fecha.isValid() || cuentaOrigenId == cuentaDestinoId || montoOrigenCentavos <= 0 ||
+        montoDestinoCentavos <= 0) {
+        m_lastError = QStringLiteral("Transferencia invalida.");
+        return false;
+    }
+
+    const QString mes = fecha.toString(QStringLiteral("yyyy-MM"));
+    const QString categoriaNormalizada =
+        categoria.trimmed().isEmpty() ? QStringLiteral("Transferencia") : categoria.trimmed();
+    const QString grupo = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+
+    if (!db.transaction()) {
+        m_lastError = db.lastError().text();
+        return false;
+    }
+
+    if (!ensureSaldoMesForCuenta(cuentaOrigenId, mes) || !ensureSaldoMesForCuenta(cuentaDestinoId, mes)) {
+        db.rollback();
+        return false;
+    }
+
+    auto insertLado = [&](std::int64_t cuentaId, std::int64_t monto) -> bool {
+        QSqlQuery insertMovimiento(db);
+        insertMovimiento.prepare(QStringLiteral(
+            "INSERT INTO movimiento (cuenta_id, mes, fecha, monto, concepto, categoria, "
+            "es_transferencia, transferencia_grupo) "
+            "VALUES (:cuenta_id, :mes, :fecha, :monto, :concepto, :categoria, 1, :grupo)"));
+        insertMovimiento.bindValue(QStringLiteral(":cuenta_id"), cuentaId);
+        insertMovimiento.bindValue(QStringLiteral(":mes"), mes);
+        insertMovimiento.bindValue(QStringLiteral(":fecha"), fecha.toString(Qt::ISODate));
+        insertMovimiento.bindValue(QStringLiteral(":monto"), monto);
+        insertMovimiento.bindValue(QStringLiteral(":concepto"), concepto);
+        insertMovimiento.bindValue(QStringLiteral(":categoria"), categoriaNormalizada);
+        insertMovimiento.bindValue(QStringLiteral(":grupo"), grupo);
+        if (!insertMovimiento.exec()) {
+            m_lastError = insertMovimiento.lastError().text();
+            return false;
+        }
+        return aplicarMontoSaldo(cuentaId, mes, monto);
+    };
+
+    if (!insertLado(cuentaOrigenId, -montoOrigenCentavos) ||
+        !insertLado(cuentaDestinoId, montoDestinoCentavos)) {
         db.rollback();
         return false;
     }
@@ -346,13 +408,33 @@ bool Database::actualizarMovimiento(std::int64_t movimientoId, const QDate &fech
     return true;
 }
 
+bool Database::setEsTransferencia(std::int64_t movimientoId, bool esTransferencia)
+{
+    QSqlDatabase db = QSqlDatabase::database(m_connectionName);
+    QSqlQuery query(db);
+    query.prepare(QStringLiteral(
+        "UPDATE movimiento SET es_transferencia = :flag WHERE id = :id"));
+    query.bindValue(QStringLiteral(":flag"), esTransferencia ? 1 : 0);
+    query.bindValue(QStringLiteral(":id"), movimientoId);
+    if (!query.exec()) {
+        m_lastError = query.lastError().text();
+        return false;
+    }
+    if (query.numRowsAffected() != 1) {
+        m_lastError = QStringLiteral("Movimiento no encontrado.");
+        return false;
+    }
+    return true;
+}
+
 bool Database::eliminarMovimiento(std::int64_t movimientoId)
 {
     QSqlDatabase db = QSqlDatabase::database(m_connectionName);
 
     QSqlQuery fetch(db);
     fetch.prepare(QStringLiteral(
-        "SELECT cuenta_id, mes, monto FROM movimiento WHERE id = :id"));
+        "SELECT cuenta_id, mes, monto, IFNULL(transferencia_grupo, '') "
+        "FROM movimiento WHERE id = :id"));
     fetch.bindValue(QStringLiteral(":id"), movimientoId);
     if (!fetch.exec() || !fetch.next()) {
         m_lastError = fetch.lastError().text().isEmpty() ? QStringLiteral("Movimiento no encontrado.")
@@ -360,27 +442,62 @@ bool Database::eliminarMovimiento(std::int64_t movimientoId)
         return false;
     }
 
-    const std::int64_t cuentaId = fetch.value(0).toLongLong();
-    const QString mes = fetch.value(1).toString();
-    const std::int64_t monto = fetch.value(2).toLongLong();
+    const QString grupo = fetch.value(3).toString();
+
+    struct Lado
+    {
+        std::int64_t cuentaId = 0;
+        QString mes;
+        std::int64_t monto = 0;
+        std::int64_t id = 0;
+    };
+    std::vector<Lado> lados;
+
+    if (!grupo.isEmpty()) {
+        QSqlQuery pares(db);
+        pares.prepare(QStringLiteral(
+            "SELECT id, cuenta_id, mes, monto FROM movimiento WHERE transferencia_grupo = :grupo"));
+        pares.bindValue(QStringLiteral(":grupo"), grupo);
+        if (!pares.exec()) {
+            m_lastError = pares.lastError().text();
+            return false;
+        }
+        while (pares.next()) {
+            Lado lado;
+            lado.id = pares.value(0).toLongLong();
+            lado.cuentaId = pares.value(1).toLongLong();
+            lado.mes = pares.value(2).toString();
+            lado.monto = pares.value(3).toLongLong();
+            lados.push_back(lado);
+        }
+    } else {
+        Lado lado;
+        lado.id = movimientoId;
+        lado.cuentaId = fetch.value(0).toLongLong();
+        lado.mes = fetch.value(1).toString();
+        lado.monto = fetch.value(2).toLongLong();
+        lados.push_back(lado);
+    }
 
     if (!db.transaction()) {
         m_lastError = db.lastError().text();
         return false;
     }
 
-    QSqlQuery remove(db);
-    remove.prepare(QStringLiteral("DELETE FROM movimiento WHERE id = :id"));
-    remove.bindValue(QStringLiteral(":id"), movimientoId);
-    if (!remove.exec()) {
-        m_lastError = remove.lastError().text();
-        db.rollback();
-        return false;
-    }
+    for (const Lado &lado : lados) {
+        QSqlQuery remove(db);
+        remove.prepare(QStringLiteral("DELETE FROM movimiento WHERE id = :id"));
+        remove.bindValue(QStringLiteral(":id"), lado.id);
+        if (!remove.exec()) {
+            m_lastError = remove.lastError().text();
+            db.rollback();
+            return false;
+        }
 
-    if (!aplicarMontoSaldo(cuentaId, mes, -monto)) {
-        db.rollback();
-        return false;
+        if (!aplicarMontoSaldo(lado.cuentaId, lado.mes, -lado.monto)) {
+            db.rollback();
+            return false;
+        }
     }
 
     if (!db.commit()) {
@@ -398,7 +515,8 @@ std::vector<Movimiento> Database::movimientosDeCuenta(std::int64_t cuentaId, con
     QSqlDatabase db = QSqlDatabase::database(m_connectionName);
     QSqlQuery query(db);
     query.prepare(QStringLiteral(
-        "SELECT m.id, m.cuenta_id, m.mes, m.fecha, m.monto, m.concepto, m.categoria, c.moneda "
+        "SELECT m.id, m.cuenta_id, m.mes, m.fecha, m.monto, m.concepto, m.categoria, c.moneda, "
+        "IFNULL(m.es_transferencia, 0), IFNULL(m.transferencia_grupo, '') "
         "FROM movimiento m "
         "INNER JOIN cuenta c ON c.id = m.cuenta_id "
         "WHERE m.cuenta_id = :cuenta_id AND m.mes = :mes "
@@ -421,6 +539,8 @@ std::vector<Movimiento> Database::movimientosDeCuenta(std::int64_t cuentaId, con
         movimiento.concepto = query.value(5).toString();
         movimiento.categoria = query.value(6).toString();
         movimiento.moneda = monedaFromInt(query.value(7).toInt());
+        movimiento.esTransferencia = query.value(8).toInt() != 0;
+        movimiento.transferenciaGrupo = query.value(9).toString();
         movimientos.push_back(movimiento);
     }
 
@@ -462,6 +582,7 @@ std::vector<GastoCategoria> Database::gastoPorCategoria(const QString &mes, Mone
         "FROM movimiento m "
         "INNER JOIN cuenta c ON c.id = m.cuenta_id "
         "WHERE m.mes = :mes AND c.moneda = :moneda AND m.monto < 0 "
+        "AND IFNULL(m.es_transferencia, 0) = 0 "
         "GROUP BY 1 "
         "ORDER BY 2 DESC"));
     query.bindValue(QStringLiteral(":sin_categoria"), QStringLiteral("Sin categoría"));
@@ -552,7 +673,7 @@ std::vector<ResumenMes> Database::resumenHistorico()
             "INNER JOIN cuenta c ON c.id = s.cuenta_id "
             "LEFT JOIN ("
             "SELECT cuenta_id, mes, SUM(ABS(monto)) AS gastado "
-            "FROM movimiento WHERE monto < 0 "
+            "FROM movimiento WHERE monto < 0 AND IFNULL(es_transferencia, 0) = 0 "
             "GROUP BY cuenta_id, mes"
             ") g ON g.cuenta_id = s.cuenta_id AND g.mes = s.mes "
             "GROUP BY s.mes "
@@ -672,11 +793,13 @@ bool Database::exportCsv(const QString &directoryPath)
     }
 
     if (!writeTable(QStringLiteral("movimientos.csv"),
-                    QStringLiteral("SELECT id, cuenta_id, mes, fecha, monto, concepto, categoria "
+                    QStringLiteral("SELECT id, cuenta_id, mes, fecha, monto, concepto, categoria, "
+                                   "IFNULL(es_transferencia, 0), IFNULL(transferencia_grupo, '') "
                                    "FROM movimiento ORDER BY id"),
                     {QStringLiteral("id"), QStringLiteral("cuenta_id"), QStringLiteral("mes"),
                      QStringLiteral("fecha"), QStringLiteral("monto"), QStringLiteral("concepto"),
-                     QStringLiteral("categoria")})) {
+                     QStringLiteral("categoria"), QStringLiteral("es_transferencia"),
+                     QStringLiteral("transferencia_grupo")})) {
         return false;
     }
 
@@ -785,10 +908,22 @@ bool Database::importCsv(const QString &directoryPath)
         return false;
     }
 
-    if (!importSimple(QStringLiteral("movimientos.csv"),
-                      QStringLiteral("INSERT INTO movimiento (id, cuenta_id, mes, fecha, monto, concepto, categoria) "
-                                     "VALUES (?, ?, ?, ?, ?, ?, ?)"),
-                      7)) {
+    QStringList movimientoHeaders;
+    (void)readCsvRows(dir.filePath(QStringLiteral("movimientos.csv")), movimientoHeaders);
+    if (movimientoHeaders.size() >= 9) {
+        if (!importSimple(QStringLiteral("movimientos.csv"),
+                          QStringLiteral(
+                              "INSERT INTO movimiento (id, cuenta_id, mes, fecha, monto, concepto, "
+                              "categoria, es_transferencia, transferencia_grupo) "
+                              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"),
+                          9)) {
+            return false;
+        }
+    } else if (!importSimple(QStringLiteral("movimientos.csv"),
+                             QStringLiteral(
+                                 "INSERT INTO movimiento (id, cuenta_id, mes, fecha, monto, concepto, categoria) "
+                                 "VALUES (?, ?, ?, ?, ?, ?, ?)"),
+                             7)) {
         return false;
     }
 
@@ -894,6 +1029,8 @@ bool Database::initializeSchema()
             "monto INTEGER NOT NULL,"
             "concepto TEXT NOT NULL,"
             "categoria TEXT,"
+            "es_transferencia INTEGER NOT NULL DEFAULT 0,"
+            "transferencia_grupo TEXT,"
             "FOREIGN KEY (cuenta_id) REFERENCES cuenta(id) ON DELETE CASCADE"
             ")"),
     };
@@ -918,10 +1055,16 @@ bool Database::migrateSchema()
     }
 
     bool hasCategoria = false;
+    bool hasEsTransferencia = false;
+    bool hasTransferenciaGrupo = false;
     while (info.next()) {
-        if (info.value(1).toString() == QStringLiteral("categoria")) {
+        const QString columnName = info.value(1).toString();
+        if (columnName == QStringLiteral("categoria")) {
             hasCategoria = true;
-            break;
+        } else if (columnName == QStringLiteral("es_transferencia")) {
+            hasEsTransferencia = true;
+        } else if (columnName == QStringLiteral("transferencia_grupo")) {
+            hasTransferenciaGrupo = true;
         }
     }
 
@@ -933,12 +1076,42 @@ bool Database::migrateSchema()
         }
     }
 
+    if (!hasEsTransferencia) {
+        QSqlQuery alter(db);
+        if (!alter.exec(QStringLiteral(
+                "ALTER TABLE movimiento ADD COLUMN es_transferencia INTEGER NOT NULL DEFAULT 0"))) {
+            m_lastError = alter.lastError().text();
+            return false;
+        }
+    }
+
+    if (!hasTransferenciaGrupo) {
+        QSqlQuery alter(db);
+        if (!alter.exec(QStringLiteral("ALTER TABLE movimiento ADD COLUMN transferencia_grupo TEXT"))) {
+            m_lastError = alter.lastError().text();
+            return false;
+        }
+    }
+
     // Movimientos de Fase 4: copiar concepto a categoría si no tenían una.
     QSqlQuery backfill(db);
     if (!backfill.exec(QStringLiteral(
             "UPDATE movimiento SET categoria = concepto "
             "WHERE (categoria IS NULL OR TRIM(categoria) = '') AND TRIM(concepto) != ''"))) {
         m_lastError = backfill.lastError().text();
+        return false;
+    }
+
+    QSqlQuery markTransfers(db);
+    if (!markTransfers.exec(QStringLiteral(
+            "UPDATE movimiento SET es_transferencia = 1 "
+            "WHERE IFNULL(es_transferencia, 0) = 0 AND ("
+            "LOWER(IFNULL(categoria, '')) LIKE '%venda%' OR "
+            "LOWER(IFNULL(concepto, '')) LIKE '%tranf%' OR "
+            "LOWER(IFNULL(concepto, '')) LIKE '%transf%' OR "
+            "LOWER(IFNULL(categoria, '')) = 'transferencia'"
+            ")"))) {
+        m_lastError = markTransfers.lastError().text();
         return false;
     }
 

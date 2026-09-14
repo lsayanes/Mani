@@ -25,7 +25,7 @@ Una cuenta pertenece a una sola moneda. El saldo negativo esta permitido (p. ej.
 | **Mes activo** | `YYYY-MM` del reloj del dispositivo. En Fase 1 no hay selector de mes. |
 | **Saldo inicial** | Saldo de referencia del mes (lo que habia al empezar). |
 | **Saldo actual** | Saldo del mes en curso. |
-| **Gastado** | Suma de egresos del mes (lo que salio de la cuenta). Los ingresos no lo modifican. |
+| **Gastado** | Suma de egresos del mes que no son transferencias. Los ingresos y los pases entre cuentas no lo modifican. |
 | **Tipo de cambio** | Una sola tasa editable por mes: cuantos ARS vale 1 USD (oficial, MEP o blue: la que el usuario quiera usar). |
 
 **Rollover (regla de negocio, desde Fase 1):** al abrir un mes nuevo, para cada cuenta `saldo_inicial` del mes = `saldo_actual` del mes anterior, y `saldo_actual` arranca igual. Si no hay mes previo, el alta usa el saldo inicial que cargo el usuario.
@@ -124,7 +124,7 @@ Principal  →  Alta de cuenta
 
 ### Gasto por cuenta
 
-`gastado` = suma de egresos del mes (`monto < 0`). Visible junto al saldo actual. Los ingresos suben el saldo actual y no restan gastado.
+`gastado` = suma de egresos del mes que **no** son transferencias. Los ingresos y las transferencias (p. ej. vender dolares e ingresar pesos) no cuentan como gasto.
 
 ### Tipo de cambio USD → ARS
 
@@ -151,7 +151,8 @@ Ejemplo: gastado USD $100,00 (10000 centavos) + gastado ARS $5.000,00 con tasa 1
 
 ## Fase 4 — Movimientos
 
-- Registrar ingresos/egresos individuales (**cuenta**, fecha, monto, moneda, concepto) que actualizan `saldo_actual` del mes correspondiente.
+- Registro de **movimientos** (ingreso/egreso/transferencia) por cuenta.
+- Las **transferencias** (incluida venta de moneda) mueven saldo entre cuentas y **no suman a Gastado**.
 - Reemplazan la edicion directa del saldo actual.
 - Un movimiento pertenece siempre a una cuenta. La moneda del movimiento es la de la cuenta.
 

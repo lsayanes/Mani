@@ -17,4 +17,6 @@ struct Movimiento
     QString concepto;
     QString categoria;
     Moneda moneda = Moneda::ARS;
+    bool esTransferencia = false;
+    QString transferenciaGrupo;
 };

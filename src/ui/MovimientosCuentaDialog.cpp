@@ -30,8 +30,9 @@ MovimientosCuentaDialog::MovimientosCuentaDialog(Database *database, const Cuent
     auto *intro = new QLabel(tr("Mes: %1 — Moneda: %2").arg(mes, monedaLabel(cuenta.moneda)), this);
 
     m_table = new QTableWidget(this);
-    m_table->setColumnCount(4);
-    m_table->setHorizontalHeaderLabels({tr("Fecha"), tr("Concepto"), tr("Categoría"), tr("Monto")});
+    m_table->setColumnCount(5);
+    m_table->setHorizontalHeaderLabels(
+        {tr("Fecha"), tr("Tipo"), tr("Concepto"), tr("Categoría"), tr("Monto")});
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -40,9 +41,11 @@ MovimientosCuentaDialog::MovimientosCuentaDialog(Database *database, const Cuent
 
     auto *agregarButton = new QPushButton(tr("Agregar movimiento"), this);
     auto *editarButton = new QPushButton(tr("Editar"), this);
+    auto *transferButton = new QPushButton(tr("Marcar como transferencia"), this);
     auto *eliminarButton = new QPushButton(tr("Eliminar"), this);
     connect(agregarButton, &QPushButton::clicked, this, &MovimientosCuentaDialog::onAgregar);
     connect(editarButton, &QPushButton::clicked, this, &MovimientosCuentaDialog::onEditar);
+    connect(transferButton, &QPushButton::clicked, this, &MovimientosCuentaDialog::onMarcarTransferencia);
     connect(eliminarButton, &QPushButton::clicked, this, &MovimientosCuentaDialog::onEliminar);
     connect(m_table, &QTableWidget::cellDoubleClicked, this, &MovimientosCuentaDialog::onEditar);
 
@@ -54,6 +57,7 @@ MovimientosCuentaDialog::MovimientosCuentaDialog(Database *database, const Cuent
     layout->addWidget(m_table, 1);
     layout->addWidget(agregarButton);
     layout->addWidget(editarButton);
+    layout->addWidget(transferButton);
     layout->addWidget(eliminarButton);
     layout->addWidget(buttons);
 
@@ -71,11 +75,15 @@ void MovimientosCuentaDialog::populateTable()
         auto *fechaItem = new QTableWidgetItem(movimiento.fecha.toString(QStringLiteral("dd/MM/yyyy")));
         fechaItem->setData(Qt::UserRole, movimiento.id);
         m_table->setItem(row, 0, fechaItem);
-        m_table->setItem(row, 1, new QTableWidgetItem(movimiento.concepto));
+        m_table->setItem(row, 1, new QTableWidgetItem(movimiento.esTransferencia
+                                                           ? tr("Transferencia")
+                                                           : (movimiento.monto >= 0 ? tr("Ingreso")
+                                                                                    : tr("Egreso"))));
+        m_table->setItem(row, 2, new QTableWidgetItem(movimiento.concepto));
         const QString categoriaTexto =
             movimiento.categoria.isEmpty() ? tr("Sin categoría") : movimiento.categoria;
-        m_table->setItem(row, 2, new QTableWidgetItem(categoriaTexto));
-        m_table->setItem(row, 3, new QTableWidgetItem(formatMoney(movimiento.monto)));
+        m_table->setItem(row, 3, new QTableWidgetItem(categoriaTexto));
+        m_table->setItem(row, 4, new QTableWidgetItem(formatMoney(movimiento.monto)));
     }
 
     m_table->resizeColumnsToContents();
@@ -83,16 +91,25 @@ void MovimientosCuentaDialog::populateTable()
 
 void MovimientosCuentaDialog::onAgregar()
 {
-    const std::vector<Cuenta> cuentas = {m_cuenta};
-    MovimientoDialog dialog(cuentas, m_fechaDefault, m_database->categoriasConocidas(), this);
+    const std::vector<Cuenta> cuentas = m_database->cuentasDelMes(m_mes);
+    MovimientoDialog dialog(cuentas.empty() ? std::vector<Cuenta>{m_cuenta} : cuentas, m_fechaDefault,
+                            m_database->categoriasConocidas(), this);
     dialog.setCuentaId(m_cuenta.id);
 
     if (dialog.exec() != QDialog::Accepted) {
         return;
     }
 
-    if (!m_database->crearMovimiento(dialog.cuentaId(), dialog.fecha(), dialog.montoCentavos(),
-                                     dialog.concepto(), dialog.categoria())) {
+    bool ok = false;
+    if (dialog.tipo() == MovimientoDialog::Tipo::Transferencia) {
+        ok = m_database->crearTransferencia(dialog.cuentaId(), dialog.cuentaDestinoId(), dialog.fecha(),
+                                            dialog.montoOrigenCentavos(), dialog.montoDestinoCentavos(),
+                                            dialog.concepto(), dialog.categoria());
+    } else {
+        ok = m_database->crearMovimiento(dialog.cuentaId(), dialog.fecha(), dialog.montoCentavos(),
+                                         dialog.concepto(), dialog.categoria());
+    }
+    if (!ok) {
         QMessageBox::critical(this, tr("Error"), m_database->lastError());
         return;
     }
@@ -129,6 +146,25 @@ void MovimientosCuentaDialog::onEditar()
     emit datosModificados();
 }
 
+void MovimientosCuentaDialog::onMarcarTransferencia()
+{
+    const int row = m_table->currentRow();
+    if (row < 0 || row >= static_cast<int>(m_movimientos.size())) {
+        QMessageBox::information(this, tr("Transferencia"), tr("Selecciona un movimiento."));
+        return;
+    }
+
+    const Movimiento &movimiento = m_movimientos[static_cast<std::size_t>(row)];
+    const bool marcar = !movimiento.esTransferencia;
+    if (!m_database->setEsTransferencia(movimiento.id, marcar)) {
+        QMessageBox::critical(this, tr("Error"), m_database->lastError());
+        return;
+    }
+
+    populateTable();
+    emit datosModificados();
+}
+
 void MovimientosCuentaDialog::onEliminar()
 {
     const int row = m_table->currentRow();
@@ -144,7 +180,9 @@ void MovimientosCuentaDialog::onEliminar()
 
     const std::int64_t movimientoId = fechaItem->data(Qt::UserRole).toLongLong();
     const auto answer =
-        QMessageBox::question(this, tr("Confirmar eliminacion"), tr("Queres eliminar este movimiento?"));
+        QMessageBox::question(this, tr("Confirmar eliminacion"),
+                              tr("Queres eliminar este movimiento?\n"
+                                 "Si es una transferencia, tambien se elimina el otro lado."));
     if (answer != QMessageBox::Yes) {
         return;
     }
