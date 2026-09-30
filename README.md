@@ -96,7 +96,7 @@ Para generar un `.app` autocontenido (con Qt y el driver SQLite incluidos) e ins
 ./package.sh
 ```
 
-Eso compila en **Release**, empaqueta con `macdeployqt`, deja una copia en `dist/Mani-1.2.0.app` e instala en `/Applications/Mani.app`.
+Eso compila en **Release**, empaqueta con `macdeployqt`, deja una copia en `dist/Mani-1.3.0.app` e instala en `/Applications/Mani.app`.
 
 Solo empaquetar sin instalar:
 
@@ -104,7 +104,7 @@ Solo empaquetar sin instalar:
 ./package.sh --local
 ```
 
-Luego podés arrastrar `dist/Mani-1.2.0.app` a Aplicaciones a mano.
+Luego podés arrastrar `dist/Mani-1.3.0.app` a Aplicaciones a mano.
 
 **Nota:** la firma es ad-hoc (uso en tu Mac). La primera vez macOS puede pedirte confirmar en *Ajustes del sistema → Privacidad y seguridad*.
 

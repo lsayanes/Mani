@@ -11,6 +11,8 @@ struct TotalesMes
     std::int64_t actualArs = 0;
     std::int64_t gastadoUsd = 0;
     std::int64_t gastadoArs = 0;
+    std::int64_t ingresadoUsd = 0;
+    std::int64_t ingresadoArs = 0;
 };
 
 TotalesMes calcularTotales(const std::vector<Cuenta> &cuentas);

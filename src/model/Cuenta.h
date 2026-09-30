@@ -14,4 +14,5 @@ struct Cuenta
     std::int64_t saldoInicial = 0;
     std::int64_t saldoActual = 0;
     std::int64_t gastado = 0;
+    std::int64_t ingresado = 0;
 };

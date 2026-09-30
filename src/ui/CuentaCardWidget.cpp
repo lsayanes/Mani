@@ -38,6 +38,7 @@ CuentaCardWidget::CuentaCardWidget(const Cuenta &cuenta, QWidget *parent)
     addMoneyRow(layout, tr("Inicial"), &m_inicialValue);
     addMoneyRow(layout, tr("Actual"), &m_actualValue);
     addMoneyRow(layout, tr("Gastado"), &m_gastadoValue);
+    addMoneyRow(layout, tr("Ingresos"), &m_ingresadoValue);
     layout->addLayout(buttonsLayout);
 
     refresh();
@@ -53,6 +54,7 @@ QHBoxLayout *CuentaCardWidget::addMoneyRow(QVBoxLayout *layout, const QString &p
 
     auto *valueLabel = new QLabel(this);
     valueLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    configureCopyableMoneyLabel(valueLabel);
 
     row->addWidget(prefixLabel);
     row->addStretch();
@@ -80,4 +82,5 @@ void CuentaCardWidget::refresh()
     styleMoneyValue(m_inicialValue, m_cuenta.saldoInicial);
     styleMoneyValue(m_actualValue, m_cuenta.saldoActual);
     styleMoneyValue(m_gastadoValue, m_cuenta.gastado);
+    styleMoneyValue(m_ingresadoValue, m_cuenta.ingresado);
 }

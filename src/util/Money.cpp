@@ -51,8 +51,20 @@ std::optional<std::int64_t> parseMoney(const QString &text)
     return static_cast<std::int64_t>(centavos);
 }
 
+void configureCopyableMoneyLabel(QLabel *label)
+{
+    if (!label) {
+        return;
+    }
+
+    label->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
+    label->setCursor(Qt::IBeamCursor);
+    label->setFocusPolicy(Qt::ClickFocus);
+}
+
 void styleMoneyValue(QLabel *label, std::int64_t centavos)
 {
+    configureCopyableMoneyLabel(label);
     label->setText(formatMoney(centavos));
     if (centavos < 0) {
         label->setStyleSheet(QStringLiteral("color: #c0392b;"));

@@ -45,4 +45,7 @@ private:
     QLabel *m_gastadoUsdValue = nullptr;
     QLabel *m_gastadoArsValue = nullptr;
     QLabel *m_gastadoConsolidadoValue = nullptr;
+    QLabel *m_ingresadoUsdValue = nullptr;
+    QLabel *m_ingresadoArsValue = nullptr;
+    QLabel *m_ingresadoConsolidadoValue = nullptr;
 };

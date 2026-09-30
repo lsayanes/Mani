@@ -101,6 +101,14 @@ TotalesPanelWidget::TotalesPanelWidget(QWidget *parent)
     grid->addWidget(m_gastadoArsValue, 2, 2);
     grid->addWidget(m_gastadoConsolidadoValue, 2, 3);
 
+    grid->addWidget(new QLabel(tr("Ingresos"), this), 3, 0);
+    m_ingresadoUsdValue = makeValueLabel();
+    m_ingresadoArsValue = makeValueLabel();
+    m_ingresadoConsolidadoValue = makeValueLabel();
+    grid->addWidget(m_ingresadoUsdValue, 3, 1);
+    grid->addWidget(m_ingresadoArsValue, 3, 2);
+    grid->addWidget(m_ingresadoConsolidadoValue, 3, 3);
+
     layout->addLayout(grid);
 
     m_consolidadoHint = new QLabel(
@@ -113,6 +121,7 @@ QLabel *TotalesPanelWidget::makeValueLabel()
 {
     auto *label = new QLabel(this);
     label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    configureCopyableMoneyLabel(label);
     return label;
 }
 
@@ -131,10 +140,13 @@ void TotalesPanelWidget::setTotales(const TotalesMes &totales, std::optional<std
     styleMoneyValue(m_actualArsValue, totales.actualArs);
     styleMoneyValue(m_gastadoUsdValue, totales.gastadoUsd);
     styleMoneyValue(m_gastadoArsValue, totales.gastadoArs);
+    styleMoneyValue(m_ingresadoUsdValue, totales.ingresadoUsd);
+    styleMoneyValue(m_ingresadoArsValue, totales.ingresadoArs);
 
     const bool hasTasa = usdAArsCentavos.has_value();
     m_actualConsolidadoValue->setVisible(hasTasa);
     m_gastadoConsolidadoValue->setVisible(hasTasa);
+    m_ingresadoConsolidadoValue->setVisible(hasTasa);
     m_consolidadoHint->setVisible(!hasTasa);
 
     if (hasTasa) {
@@ -142,9 +154,13 @@ void TotalesPanelWidget::setTotales(const TotalesMes &totales, std::optional<std
                         consolidadoEnArs(totales.actualArs, totales.actualUsd, *usdAArsCentavos));
         styleMoneyValue(m_gastadoConsolidadoValue,
                         consolidadoEnArs(totales.gastadoArs, totales.gastadoUsd, *usdAArsCentavos));
+        styleMoneyValue(m_ingresadoConsolidadoValue,
+                        consolidadoEnArs(totales.ingresadoArs, totales.ingresadoUsd,
+                                         *usdAArsCentavos));
     } else {
         m_actualConsolidadoValue->clear();
         m_gastadoConsolidadoValue->clear();
+        m_ingresadoConsolidadoValue->clear();
     }
 }
 

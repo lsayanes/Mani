@@ -32,4 +32,5 @@ private:
     QLabel *m_inicialValue = nullptr;
     QLabel *m_actualValue = nullptr;
     QLabel *m_gastadoValue = nullptr;
+    QLabel *m_ingresadoValue = nullptr;
 };

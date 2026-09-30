@@ -100,7 +100,7 @@ std::vector<Cuenta> Database::cuentasDelMes(const QString &mes)
     QSqlQuery query(db);
     query.prepare(QStringLiteral(
         "SELECT c.id, c.nombre, c.moneda, s.saldo_inicial, s.saldo_actual, "
-        "COALESCE(g.gastado, 0) "
+        "COALESCE(g.gastado, 0), COALESCE(i.ingresado, 0) "
         "FROM cuenta c "
         "INNER JOIN saldo_mes s ON s.cuenta_id = c.id "
         "LEFT JOIN ("
@@ -108,6 +108,11 @@ std::vector<Cuenta> Database::cuentasDelMes(const QString &mes)
         "FROM movimiento WHERE monto < 0 AND IFNULL(es_transferencia, 0) = 0 "
         "GROUP BY cuenta_id, mes"
         ") g ON g.cuenta_id = c.id AND g.mes = s.mes "
+        "LEFT JOIN ("
+        "SELECT cuenta_id, mes, SUM(monto) AS ingresado "
+        "FROM movimiento WHERE monto > 0 AND IFNULL(es_transferencia, 0) = 0 "
+        "GROUP BY cuenta_id, mes"
+        ") i ON i.cuenta_id = c.id AND i.mes = s.mes "
         "WHERE s.mes = :mes "
         "ORDER BY c.id"));
     query.bindValue(QStringLiteral(":mes"), mes);
@@ -125,6 +130,7 @@ std::vector<Cuenta> Database::cuentasDelMes(const QString &mes)
         cuenta.saldoInicial = query.value(3).toLongLong();
         cuenta.saldoActual = query.value(4).toLongLong();
         cuenta.gastado = query.value(5).toLongLong();
+        cuenta.ingresado = query.value(6).toLongLong();
         cuentas.push_back(cuenta);
     }
 

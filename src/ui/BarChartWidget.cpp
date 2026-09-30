@@ -18,6 +18,7 @@ BarChartWidget::BarChartWidget(QWidget *parent)
     : QWidget(parent)
 {
     setMinimumHeight(120);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
 }
 
 void BarChartWidget::setTitulo(const QString &titulo)
@@ -65,10 +66,22 @@ void BarChartWidget::paintEvent(QPaintEvent *event)
     }
 
     int y = area.y() + (m_titulo.isEmpty() ? 0 : 24);
-    const int barAreaWidth = area.width() - kLabelWidth - 100;
 
     QFont labelFont = painter.font();
     painter.setFont(labelFont);
+
+    // Ancho necesario para el monto más largo: así el texto nunca queda
+    // cortado y la barra se adapta al resize de la ventana.
+    const QFontMetrics fm = painter.fontMetrics();
+    int valueWidth = 0;
+    for (const GastoCategoria &dato : m_datos) {
+        valueWidth = qMax(valueWidth, fm.horizontalAdvance(formatMoney(dato.totalCentavos)));
+    }
+    valueWidth += 8; // margen
+
+    const int gap = 8;
+    int barAreaWidth = area.width() - kLabelWidth - valueWidth - gap * 2;
+    barAreaWidth = qMax(barAreaWidth, 40);
 
     for (const GastoCategoria &dato : m_datos) {
         const int barWidth =
@@ -82,7 +95,9 @@ void BarChartWidget::paintEvent(QPaintEvent *event)
         const QRect barRect(area.x() + kLabelWidth, y, qMax(barWidth, 2), kBarHeight);
         painter.fillRect(barRect, QColor(QStringLiteral("#27ae60")));
 
-        painter.drawText(barRect.right() + 8, y, 90, kBarHeight, Qt::AlignVCenter | Qt::AlignLeft,
+        const QRect valueRect(barRect.right() + gap, y, area.right() - barRect.right() - gap + 1,
+                              kBarHeight);
+        painter.drawText(valueRect, Qt::AlignVCenter | Qt::AlignLeft,
                          formatMoney(dato.totalCentavos));
 
         y += kBarHeight + kBarGap;
